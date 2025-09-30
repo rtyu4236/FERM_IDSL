@@ -7,15 +7,15 @@ from logger_setup import logger
 
 def load_raw_data():
     """
-    모든 원시 데이터 파일을 로드하고 초기 정제 작업 수행.
+    모든 원시 데이터 파일을 로드하고 초기 정제 작업 수행
 
-    `config.py`에 정의된 `DATA_DIR`에서 원본 CSV 파일 로드.
-    기본 전처리(날짜 변환, 컬럼명 표준화 등) 수행.
+    `config.py`에 정의된 `DATA_DIR`에서 원본 CSV 파일 로드
+    기본 전처리(날짜 변환, 컬럼명 표준화 등) 수행
 
     Returns:
-        tuple: (daily_df, monthly_df, vix_df, ff_df) 데이터프레임 튜플.
+        tuple: (daily_df, monthly_df, vix_df, ff_df) 데이터프레임 튜플
     """
-    logger.info("원시 데이터 파일 로드 시작...")
+    logger.info("원시 데이터 파일 로드 시작")
     
     daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily.csv'), low_memory=False)
     daily_df['date'] = pd.to_datetime(daily_df['date'], format='%Y%m%d')
@@ -35,23 +35,24 @@ def load_raw_data():
     ff_df.rename(columns={'Unnamed: 0': 'date'}, inplace=True)
     ff_df = ff_df[pd.to_numeric(ff_df['date'], errors='coerce').notna()]
     ff_df['date'] = pd.to_datetime(ff_df['date'], format='%Y%m')
+    ff_df['date'] = ff_df['date'] + pd.offsets.MonthEnd(0)
     ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']] = ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']].astype(float) / 100
     
-    logger.info("원시 데이터 로딩 완료.")
+    logger.info("원시 데이터 로딩 완료")
     return daily_df, monthly_df, vix_df, ff_df
 
 def create_feature_dataset(daily_df, monthly_df):
     """
-    머신러닝 모델을 위한 통합 피처(feature) 데이터셋 생성.
+    머신러닝 모델을 위한 통합 피처(feature) 데이터셋 생성
 
-    `config.py` 설정에 따라 캐싱 및 피처 정상성 검증 기능 지원.
+    `config.py` 설정에 따라 캐싱 및 피처 정상성 검증 기능 지원
 
     Args:
-        daily_df (pd.DataFrame): 일별 CRSP 데이터.
-        monthly_df (pd.DataFrame): 월별 CRSP 데이터.
+        daily_df (pd.DataFrame): 일별 CRSP 데이터
+        monthly_df (pd.DataFrame): 월별 CRSP 데이터
 
     Returns:
-        pd.DataFrame: 모든 피처와 타겟 변수가 포함된 최종 데이터프레임.
+        pd.DataFrame: 모든 피처와 타겟 변수가 포함된 최종 데이터프레임
     """
     cache_path = os.path.join(config.CACHE_DIR, f'feature_dataset_stationary_{config.CHECK_STATIONARITY}.feather')
     
@@ -59,7 +60,7 @@ def create_feature_dataset(daily_df, monthly_df):
         logger.info(f"캐시된 피처 데이터셋 로드: {cache_path}")
         return pd.read_feather(cache_path)
 
-    logger.info("ML 모델용 피처 데이터셋 신규 생성 시작...")
+    logger.info("ML 모델용 피처 데이터셋 신규 생성 시작")
 
     # 1. 타겟 변수 생성: 다음 달의 수익률
     monthly_returns = monthly_df.pivot_table(index='date', columns='TICKER', values='retx')
@@ -98,7 +99,7 @@ def create_feature_dataset(daily_df, monthly_df):
 
     # 5. 피처 정상성 검증 및 처리
     if config.CHECK_STATIONARITY:
-        logger.info("피처 정상성(stationarity) 검증 및 처리 시작...")
+        logger.info("피처 정상성 검증 및 처리 시작")
         
         features_to_check = [
             'realized_vol', 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
@@ -112,10 +113,10 @@ def create_feature_dataset(daily_df, monthly_df):
             p_value = adfuller(final_df[col].dropna())[1]
             
             if p_value > config.STATIONARITY_SIGNIFICANCE_LEVEL:
-                logger.info(f"  - '{col}' 피처 비정상성으로 판단, 1차 차분 수행 (p-value: {p_value:.4f})")
+                logger.info(f"  - '{col}' 피처 비정상성, 1차 차분 수행 (p-value {p_value:.4f})")
                 final_df[col] = final_df.groupby('TICKER')[col].diff()
             else:
-                logger.info(f"  - '{col}' 피처 정상성 만족 (p-value: {p_value:.4f})")
+                logger.info(f"  - '{col}' 피처 정상성 만족 (p-value {p_value:.4f})")
 
     # 차분 등으로 발생한 결측치 제거
     final_df = final_df.dropna(subset=['target_return'])
@@ -133,13 +134,13 @@ def create_feature_dataset(daily_df, monthly_df):
         final_df.to_feather(cache_path)
         logger.info(f"피처 데이터셋 캐시 저장 완료: {cache_path}")
 
-    logger.info("피처 데이터셋 생성 완료.")
+    logger.info("피처 데이터셋 생성 완료")
     return final_df
 
 if __name__ == '__main__':
     daily, monthly, _, _ = load_raw_data()
     feature_dataset = create_feature_dataset(daily, monthly)
-    logger.info("\n--- 피처 데이터셋 샘플 ---")
+    logger.info("\n피처 데이터셋 샘플")
     logger.info(feature_dataset.head())
-    logger.info("\n--- 피처 데이터셋 정보 ---")
+    logger.info("\n피처 데이터셋 정보")
     feature_dataset.info()

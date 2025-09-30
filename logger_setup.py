@@ -6,7 +6,7 @@ import config
 
 def setup_logger():
     """
-    프로젝트 전반에 사용될 로거를 설정.
+    프로젝트 전반에 사용될 로거를 설정
 
     - 로그 레벨: INFO
     - 출력: 콘솔(stdout)과 파일(output/backtest_log_YYYY-MM-DD_HHMMSS.log)에 동시 출력
@@ -33,8 +33,8 @@ def setup_logger():
 
     # 전역 로거 가져오기
     logger = logging.getLogger()
-    logger.info("Logger setup complete.")
-    logger.info(f"Log file created at: {log_filepath}")
+    logger.info("로거 설정 완료")
+    logger.info(f"로그 파일 생성 위치: {log_filepath}")
     return logger
 
 # 모듈 로드 시 로거 설정

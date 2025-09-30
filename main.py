@@ -1,9 +1,7 @@
 import backtester
 import warnings
 import config
-import logger_setup # 로거 설정 임포트
-
-# pmdarima 등에서 발생하는 FutureWarning 무시 설정
+import logger_setup 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 if __name__ == '__main__':
@@ -21,3 +19,4 @@ if __name__ == '__main__':
         model_params=config.MODEL_PARAMS,
         benchmark_ticker=config.BENCHMARK_TICKER
     )
+    
