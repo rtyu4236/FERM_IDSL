@@ -17,6 +17,6 @@ if __name__ == '__main__':
         end_year=config.END_YEAR,
         etf_costs=config.ETF_COSTS,
         model_params=config.MODEL_PARAMS,
-        benchmark_ticker=config.BENCHMARK_TICKER
+        benchmark_tickers=config.BENCHMARK_TICKERS
     )
     

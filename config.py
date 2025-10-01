@@ -96,5 +96,6 @@ GROUP_CONSTRAINTS = {
 USE_TURNOVER_CONSTRAINT = True
 MAX_TURNOVER = 0.40
 
-# 비교 분석을 위한 벤치마크 티커를 설정
-BENCHMARK_TICKER = 'SPY'
+# 비교 분석을 위한 벤치마크 리스트 설정
+# None은 1/N 포트폴리오(모든 자산에 동일 비중) 벤치마크를 의미
+BENCHMARK_TICKERS = ['SPY', 'QQQ', None]
