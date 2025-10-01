@@ -1,6 +1,6 @@
 ipykernel
 pandas==2.2.3
-numpy==2.2.5
+numpy>=1.21.2,<2.0
 matplotlib
 scikit-learn
 seaborn
@@ -8,4 +8,5 @@ cvxopt==1.3.2
 statsmodels==0.14.5
 pmdarima==2.0.4
 QuantStats==0.0.77
-scipy==1.15.3
+scipy>=1.3.2,<1.16.0
+pyarrow
