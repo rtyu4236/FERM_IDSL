@@ -31,8 +31,8 @@ def load_raw_data():
     vix_df.rename(columns={'Date': 'date'}, inplace=True)
     vix_df['date'] = pd.to_datetime(vix_df['date'])
 
-    ff_df = pd.read_csv(os.path.join(config.DATA_DIR, 'F-F_Research_Data_Factors.csv'), skiprows=3)
-    ff_df.rename(columns={'Unnamed: 0': 'date'}, inplace=True)
+    ff_df = pd.read_csv(os.path.join(config.DATA_DIR, 'F-F_Research_Data_Factors_monthly.csv'))
+    ff_df.rename(columns={'Date': 'date'}, inplace=True)
     ff_df = ff_df[pd.to_numeric(ff_df['date'], errors='coerce').notna()]
     ff_df['date'] = pd.to_datetime(ff_df['date'], format='%Y%m')
     ff_df['date'] = ff_df['date'] + pd.offsets.MonthEnd(0)
