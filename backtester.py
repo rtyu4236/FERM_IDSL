@@ -10,19 +10,19 @@ from logger_setup import logger
 
 def run_backtest(start_year, end_year, etf_costs, model_params, benchmark_ticker):
     """
-    Black-Litterman 전략과 머신러닝 뷰 기반 전체 백테스트 실행.
+    Black-Litterman 전략과 머신러닝 뷰 기반 전체 백테스트 실행
 
-    `main.py`에서 `config.py`를 통해 전달된 설정값으로 백테스팅 전 과정 조율.
-    최종적으로 `quantstats`를 사용해 상세 성과 분석 리포트 생성.
+    `main.py`에서 `config.py`를 통해 전달된 설정값으로 백테스팅 전 과정 조율
+    최종적으로 `quantstats`를 사용해 상세 성과 분석 리포트 생성
 
     Args:
-        start_year (int): 백테스트 시작 연도.
-        end_year (int): 백테스트 종료 연도.
-        etf_costs (dict): ETF별 운용 보수 및 거래 비용 정보.
-        model_params (dict): Black-Litterman 모델 및 뷰 생성 파라미터.
-        benchmark_ticker (str): 비교 벤치마크 티커.
+        start_year (int): 백테스트 시작 연도
+        end_year (int): 백테스트 종료 연도
+        etf_costs (dict): ETF별 운용 보수 및 거래 비용 정보
+        model_params (dict): Black-Litterman 모델 및 뷰 생성 파라미터
+        benchmark_ticker (str): 비교 벤치마크 티커
     """
-    logger.info("--- 백테스트 시작 ---")
+    logger.info("백테스트 프로세스 시작")
     qs.extend_pandas()
 
     # 데이터 준비
@@ -49,10 +49,11 @@ def run_backtest(start_year, end_year, etf_costs, model_params, benchmark_ticker
     previous_weights = pd.Series(dtype=float)
 
     for analysis_date in backtest_dates[:-1]:
+        logger.info(f"\n{analysis_date.strftime('%Y-%m')}월 백테스트 처리 시작")
         current_tickers, returns_pivot = bl_portfolio_model._get_current_universe(analysis_date)
         
         if not current_tickers:
-            logger.warning(f"[{analysis_date.strftime('%Y-%m-%d')}] 건너뛰기: 유니버스 구성에 필요한 자산 수 부족.")
+            logger.warning(f"{analysis_date.strftime('%Y-%m-%d')} 건너뛰기, 유니버스 구성 자산 수 부족")
             weights = pd.Series(dtype=float)
             ew_weights = pd.Series(dtype=float)
         else:
@@ -84,6 +85,10 @@ def run_backtest(start_year, end_year, etf_costs, model_params, benchmark_ticker
         next_month_date = analysis_date + pd.offsets.MonthEnd(1)
         next_month_returns = monthly_df[monthly_df['date'] == next_month_date]
 
+        if next_month_returns.empty:
+            logger.warning(f"\n{next_month_date.strftime('%Y-%m-%d')} 수익률 데이터 없음, 해당 월 백테스트 건너뜀")
+            continue
+
         if weights is not None and not weights.empty:
             merged_bl = pd.merge(weights.to_frame('weight'), next_month_returns, left_index=True, right_on='TICKER')
             raw_bl_return = (merged_bl['weight'] * merged_bl['retx']).sum()
@@ -112,7 +117,7 @@ def run_backtest(start_year, end_year, etf_costs, model_params, benchmark_ticker
         previous_weights = weights
 
     # 성과 분석 및 리포트 생성 
-    logger.info("\n백테스트 분석 및 리포트 생성 시작 ---")
+    logger.info("\n백테스트 분석 및 리포트 생성")
     
     bl_returns_series = pd.concat(bl_returns).sort_index().squeeze().rename("BL_ML_Strategy")
     ew_returns_series = pd.concat(ew_returns).sort_index().squeeze().rename("Equal_Weight")
@@ -127,9 +132,20 @@ def run_backtest(start_year, end_year, etf_costs, model_params, benchmark_ticker
         'BL_ML_Strategy': bl_returns_series,
         'Equal_Weight': ew_returns_series,
     })
-    results_path = os.path.join(config.OUTPUT_DIR, 'backtest_returns.csv')
-    results_df.to_csv(results_path)
-    logger.info(f"백테스트 수익률 데이터 저장 완료: {results_path}")
+    # results_path = os.path.join(config.OUTPUT_DIR, 'backtest_returns.csv')
+    # results_df.to_csv(results_path)
+    # logger.info(f"백테스트 수익률 데이터 저장 완료: {results_path}")
+
+    # 누적 수익률 계산 및 저장
+    logger.info("\n누적 수익률 계산 시작")
+    cumulative_results_df = (1 + results_df).cumprod()
+    cum_results_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
+    cumulative_results_df.to_csv(cum_results_path)
+    logger.info(f"누적 수익률 데이터 저장 완료: {cum_results_path}")
+    logger.info("최종 누적 수익률")
+    final_returns = cumulative_results_df.iloc[-1] - 1
+    log_str = ', '.join([f'{idx} {val:.6f}' for idx, val in final_returns.items()])
+    logger.info(log_str)
 
     # QuantStats 리포트 생성
     # report_path = os.path.join(config.OUTPUT_DIR, 'BL_ML_Strategy_report.html')

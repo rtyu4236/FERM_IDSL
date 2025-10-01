@@ -10,47 +10,52 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker='SPY'):
     """
-    장기적, 데이터 기반의 위험 회피 계수(delta) 계산.
+    장기적, 데이터 기반의 위험 회피 계수(delta) 계산
 
-    - Pi = delta * Sigma * W_mkt 공식에 사용되는 핵심 파라미터.
-    - (시장 평균 초과 수익률) / (시장 분산) 공식을 사용해 과거 데이터로부터 추정.
-    - 투자자의 위험 단위당 역사적 보상 수준을 반영.
+    - Pi = delta * Sigma * W_mkt 공식에 사용되는 핵심 파라미터
+    - (시장 평균 초과 수익률) / (시장 분산) 공식을 사용해 과거 데이터로부터 추정
+    - 투자자의 위험 단위당 역사적 보상 수준을 반영
 
     Args:
-        all_returns_df (pd.DataFrame): 모든 자산의 월별 수익률 데이터.
-        ff_df (pd.DataFrame): Fama-French 요인 데이터 (무위험 수익률 포함).
-        market_proxy_ticker (str): 시장 대표 티커.
+        all_returns_df (pd.DataFrame): 모든 자산의 월별 수익률 데이터
+        ff_df (pd.DataFrame): Fama-French 요인 데이터 (무위험 수익률 포함)
+        market_proxy_ticker (str): 시장 대표 티커
 
     Returns:
-        float: 계산된 delta. 유효하지 않을 경우 기본값 2.5 반환.
+        float: 계산된 delta, 유효하지 않을 경우 기본값 2.5 반환
     """
     market_returns = all_returns_df[all_returns_df['TICKER'] == market_proxy_ticker].set_index('date')['retx']
     ff_series = ff_df.set_index('date')['RF']
     aligned_market, aligned_rf = market_returns.align(ff_series, join='inner')
     
-    if aligned_market.empty:
-        logger.warning("장기 delta 계산을 위한 데이터 부족. 기본값 2.5 사용.")
+    if aligned_market.empty or len(aligned_market) < 2:
+        logger.warning("장기 delta 계산 데이터 부족 (정렬 후 2개 미만), 기본값 2.5 사용")
         return 2.5
 
     market_excess_returns = aligned_market - aligned_rf
     market_excess_return_annualized = market_excess_returns.mean() * 12
-    market_variance_annualized = market_returns.var() * 12
+    market_variance_annualized = aligned_market.var() * 12
+    
+    if market_variance_annualized <= 0:
+        logger.warning(f"시장 수익률 분산 0 또는 음수, 유효한 장기 delta 계산 불가, 기본값 2.5 사용")
+        return 2.5
+
     long_term_delta = market_excess_return_annualized / market_variance_annualized
     
     if not np.isfinite(long_term_delta) or long_term_delta <= 0:
-        logger.warning(f"유효한 장기 delta 계산 불가 (결과: {long_term_delta:.2f}). 기본값 2.5 사용.")
+        logger.warning(f"유효한 장기 delta 계산 불가 (결과 {long_term_delta:.2f}), 기본값 2.5 사용")
         long_term_delta = 2.5
     else:
-        logger.info(f"계산된 장기 기본 delta: {long_term_delta:.2f}")
+        logger.info(f"계산된 기본 delta: {long_term_delta:.2f}")
         
     return long_term_delta
 
 class BlackLittermanPortfolio:
     """
-    Black-Litterman 포트폴리오 최적화 수행 클래스.
+    Black-Litterman 포트폴리오 최적화 수행 클래스
 
-    - 시장 균형 수익률과 투자자의 주관적 '뷰'를 결합.
-    - 전통적 평균-분산 최적화의 한계 극복 목표.
+    - 시장 균형 수익률과 투자자의 주관적 '뷰'를 결합
+    - 전통적 평균-분산 최적화의 한계 극복 목표
     """
     
     def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_ticker):
@@ -64,9 +69,9 @@ class BlackLittermanPortfolio:
 
     def _get_current_universe(self, analysis_date):
         """
-        분석 날짜 기준, 투자 가능 자산 유니버스 결정.
-        - lookback_months 동안 데이터가 충분한 자산만 필터링.
-        - 모델 안정성 확보 및 비유동성 자산 왜곡 방지.
+        분석 날짜 기준, 투자 가능 자산 유니버스 결정
+        - lookback_months 동안 데이터가 충분한 자산만 필터링
+        - 모델 안정성 확보 및 비유동성 자산 왜곡 방지
         """
         start_date = analysis_date - pd.DateOffset(months=self.lookback_months)
         recent_data = self.all_returns_df[
@@ -83,17 +88,17 @@ class BlackLittermanPortfolio:
 
     def _calculate_inputs(self, returns_pivot, analysis_date):
         """
-        Black-Litterman 모델의 핵심 입력값 계산.
-        - Sigma: Ledoit-Wolf 공분산. 극단값 문제 완화.
-        - delta: 동적 위험 회피 계수. 시변성 반영.
-        - W_mkt: 시장 균형 가중치. 여기서는 동일 가중치 가정.
+        Black-Litterman 모델의 핵심 입력값 계산
+        - Sigma: Ledoit-Wolf 공분산, 극단값 문제 완화
+        - delta: 동적 위험 회피 계수, 시변성 반영
+        - W_mkt: 시장 균형 가중치, 여기서는 동일 가중치 가정
         """
         cov_estimator = LedoitWolf()
         cov_estimator.fit(returns_pivot)
         Sigma = cov_estimator.covariance_ * 12
 
         if np.trace(Sigma) < 1e-8:
-            logger.warning("공분산 행렬이 거의 0에 가까워 최적화 불가.")
+            logger.warning("공분산 행렬 0에 가까워 최적화 불가")
             return None, None, None
 
         eigvals, eigvecs = np.linalg.eigh(Sigma)
@@ -109,15 +114,25 @@ class BlackLittermanPortfolio:
             market_returns = returns_pivot[self.market_proxy_ticker]
             ff_series = relevant_ff.set_index('date')['RF']
             aligned_market, aligned_rf = market_returns.align(ff_series, join='inner')
-            market_excess_returns = aligned_market - aligned_rf
-            market_excess_return_annualized = market_excess_returns.mean() * 12
-            market_variance_annualized = market_returns.var() * 12
-            delta = market_excess_return_annualized / market_variance_annualized if market_variance_annualized != 0 else self.default_delta
+
+            if aligned_market.empty or len(aligned_market) < 2:
+                logger.warning(f"Delta 계산 데이터 부족 (정렬 후 2개 미만), 기본값 {self.default_delta:.2f} 사용")
+                delta = self.default_delta
+            else:
+                market_excess_returns = aligned_market - aligned_rf
+                market_excess_return_annualized = market_excess_returns.mean() * 12
+                market_variance_annualized = aligned_market.var() * 12
+                
+                if market_variance_annualized > 0:
+                    delta = market_excess_return_annualized / market_variance_annualized
+                else:
+                    logger.warning(f"시장 수익률 분산 0 또는 유효하지 않음, 기본 delta값 {self.default_delta:.2f} 사용")
+                    delta = self.default_delta
         else:
             delta = self.default_delta
 
         if not np.isfinite(delta) or delta <= 0:
-            logger.warning(f"계산된 delta가 유효하지 않음 ({delta:.2f}). 기본값 {self.default_delta:.2f} 사용.")
+            logger.warning(f"계산된 delta 유효하지 않음 ({delta:.2f}), 기본값 {self.default_delta:.2f} 사용")
             delta = self.default_delta
 
         num_assets = len(returns_pivot.columns)
@@ -125,13 +140,13 @@ class BlackLittermanPortfolio:
         return Sigma, delta, W_mkt
 
     def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None):
-        """Black-Litterman 공식 기반 최종 포트폴리오 가중치 계산.
-        - 사후 기대 수익률(mu_bl)과 후험 공분산(Sigma_post) 계산.
-        - cvxopt를 사용한 2차 계획법으로 제약조건 하 최적 가중치 결정.
+        """Black-Litterman 공식 기반 최종 포트폴리오 가중치 계산
+        - 사후 기대 수익률(mu_bl)과 후험 공분산(Sigma_post) 계산
+        - cvxopt를 사용한 2차 계획법으로 제약조건 하 최적 가중치 결정
         """
         current_tickers, returns_pivot = self._get_current_universe(analysis_date)
-        logger.info(f"\n--- {analysis_date.strftime('%Y-%m-%d')} 포트폴리오 구성 ---")
-        logger.info(f"현재 유니버스 ({len(current_tickers)}개 자산): {', '.join(current_tickers)}")
+        logger.info("포트폴리오 구성 시작")
+        logger.info(f"현재투자종목: {len(current_tickers)}개, {', '.join(current_tickers)}")
 
         if pre_calculated_inputs:
             Sigma, delta, W_mkt = pre_calculated_inputs
@@ -156,16 +171,16 @@ class BlackLittermanPortfolio:
                 mu_bl = np.dot(M, term1 + term2)
                 Sigma_post = Sigma + M
                 if not np.all(np.isfinite(mu_bl)):
-                    logger.warning("mu_bl에 유효하지 않은 값 포함. 균형 수익률 사용.")
+                    logger.warning("mu_bl에 유효하지 않은 값 포함, 균형 수익률 사용")
                     mu_bl = Pi
                     Sigma_post = Sigma
             except np.linalg.LinAlgError:
-                logger.warning("BL 계산 중 특이 행렬 발생. 균형 수익률 사용.")
+                logger.warning("BL 계산 중 특이 행렬 발생, 균형 수익률 사용")
                 mu_bl = Pi
                 Sigma_post = Sigma
         else:
             mu_bl = Pi
-            logger.info("제공된 ML 뷰 없음. 균형 수익률 사용.")
+            logger.info("제공된 ML 뷰 없음, 균형 수익률 사용")
             
         expenses = np.array([self.expense_ratios.get(ticker, 0) for ticker in current_tickers])
         mu_bl_net = mu_bl - expenses
@@ -237,14 +252,15 @@ class BlackLittermanPortfolio:
             result_x = np.array(solution['x']).flatten()
             weights = result_x[:n]
         except ValueError as e:
-            logger.error(f"CVXOPT 오류: {e}. 동일 가중치로 대체.")
+            logger.error(f"CVXOPT 오류 {e}, 동일 가중치로 대체")
             weights = np.ones(n) / n
 
         weights[weights < 1e-5] = 0
         weights /= weights.sum()
         portfolio = pd.Series(weights, index=current_tickers)
         
-        logger.info("--- 포트폴리오 구성 완료 ---")
-        logger.info(portfolio[portfolio > 0].round(4))
+        logger.info("포트폴리오 구성 완료")
+        log_str = ', '.join([f'{idx} {val:.4f}' for idx, val in portfolio[portfolio > 0].round(4).items()])
+        logger.info(log_str)
         
         return portfolio, mu_bl_net

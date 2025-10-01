@@ -1,9 +1,3 @@
-"""
-프로젝트의 모든 설정값을 관리하는 중앙 설정 파일입니다.
-
-이 파일을 수정하여 코드 변경 없이 다양한 실험 조건과 파라미터를 제어할 수 있습니다.
-"""
-
 import os
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,7 +5,11 @@ DATA_DIR = os.path.join(ROOT_DIR, 'data')
 CACHE_DIR = os.path.join(ROOT_DIR, 'cache')
 OUTPUT_DIR = os.path.join(ROOT_DIR, 'output')
 
-START_YEAR = 2023
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+START_YEAR = 2020
 END_YEAR = 2023
 
 # 각 ETF의 연간 운용 보수(expense_ratio)와 평균 매수-매도 스프레드(trading_cost_spread)를 정의
@@ -94,10 +92,9 @@ GROUP_CONSTRAINTS = {
     'REAL_ESTATE': {'min': 0.00, 'max': 0.15},
 }
 
-# 거래 회전율 제약 조건 설정 
 # True로 설정하면 포트폴리오의 월간 회전율을 MAX_TURNOVER 이하로 제한
 USE_TURNOVER_CONSTRAINT = True
-MAX_TURNOVER = 0.40 # 40% 제한
+MAX_TURNOVER = 0.40
 
 # 비교 분석을 위한 벤치마크 티커를 설정
 BENCHMARK_TICKER = 'SPY'
