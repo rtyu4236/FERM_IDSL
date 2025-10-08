@@ -13,7 +13,7 @@ def load_raw_data():
     기본 전처리(날짜 변환, 컬럼명 표준화 등) 수행
 
     Returns:
-        tuple: (daily_df, monthly_df, vix_df, ff_df) 데이터프레임 튜플
+        tuple: (daily_df, monthly_df, vix_df, ff_df, all_tickers) 튜플
     """
     logger.info("원시 데이터 파일 로드 시작")
     
@@ -27,6 +27,9 @@ def load_raw_data():
     monthly_df = monthly_df[['date', 'TICKER', 'vwretd']].copy()
     monthly_df.rename(columns={'vwretd': 'retx'}, inplace=True)
 
+    all_tickers = monthly_df['TICKER'].unique().tolist()
+    logger.info(f"데이터에서 총 {len(all_tickers)}개의 고유 티커 발견")
+
     vix_df = pd.read_csv(os.path.join(config.DATA_DIR, 'vix_index.csv'))
     vix_df.rename(columns={'Date': 'date'}, inplace=True)
     vix_df['date'] = pd.to_datetime(vix_df['date'])
@@ -39,9 +42,9 @@ def load_raw_data():
     ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']] = ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']].astype(float) / 100
     
     logger.info("원시 데이터 로딩 완료")
-    return daily_df, monthly_df, vix_df, ff_df
+    return daily_df, monthly_df, vix_df, ff_df, all_tickers
 
-def create_feature_dataset(daily_df, monthly_df):
+def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     """
     머신러닝 모델을 위한 통합 피처(feature) 데이터셋 생성
 
@@ -50,6 +53,8 @@ def create_feature_dataset(daily_df, monthly_df):
     Args:
         daily_df (pd.DataFrame): 일별 CRSP 데이터
         monthly_df (pd.DataFrame): 월별 CRSP 데이터
+        vix_df (pd.DataFrame): VIX 지수 데이터
+        ff_df (pd.DataFrame): Fama-French 요인 데이터
 
     Returns:
         pd.DataFrame: 모든 피처와 타겟 변수가 포함된 최종 데이터프레임
@@ -80,15 +85,13 @@ def create_feature_dataset(daily_df, monthly_df):
     ).reset_index()
     features['date'] = features['date'] + pd.offsets.MonthEnd(0)
     
-    # 3. 거시 경제 데이터 준비
-    _, _, vix_df, ff_df = load_raw_data()
+    # 3. 거시 경제 데이터 준비 (전달받은 데이터 사용)
     vix_monthly = vix_df.groupby(pd.Grouper(key='date', freq='ME')).agg(
         avg_vix=('^VIX', 'mean'),
         vol_of_vix=('^VIX', 'std')
     ).reset_index()
     vix_monthly['date'] = vix_monthly['date'] + pd.offsets.MonthEnd(0)
     
-    ff_df['date'] = ff_df['date'] + pd.offsets.MonthEnd(0)
     macro_df = pd.merge(vix_monthly, ff_df, on='date', how='left')
 
     # 4. 모든 데이터 병합
@@ -138,8 +141,8 @@ def create_feature_dataset(daily_df, monthly_df):
     return final_df
 
 if __name__ == '__main__':
-    daily, monthly, _, _ = load_raw_data()
-    feature_dataset = create_feature_dataset(daily, monthly)
+    daily, monthly, vix, ff, _ = load_raw_data()
+    feature_dataset = create_feature_dataset(daily, monthly, vix, ff)
     logger.info("\n피처 데이터셋 샘플")
     logger.info(feature_dataset.head())
     logger.info("\n피처 데이터셋 정보")

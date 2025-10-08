@@ -9,7 +9,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-START_YEAR = 2020
+START_YEAR = 2010
 END_YEAR = 2023
 
 # 각 ETF의 연간 운용 보수(expense_ratio)와 평균 매수-매도 스프레드(trading_cost_spread)를 정의
@@ -17,6 +17,7 @@ ETF_COSTS = {
     # US Equity (Broad)
     'SPY': {'expense_ratio': 0.0009, 'trading_cost_spread': 0.0001},
     'QQQ': {'expense_ratio': 0.0020, 'trading_cost_spread': 0.0001},
+    'QQQQ': {'expense_ratio': 0.0020, 'trading_cost_spread': 0.0001}, # QQQ의 과거 티커
     'IWM': {'expense_ratio': 0.0019, 'trading_cost_spread': 0.0001},
     'VTI': {'expense_ratio': 0.0003, 'trading_cost_spread': 0.0001},
     'MDY': {'expense_ratio': 0.0023, 'trading_cost_spread': 0.0002},
@@ -56,7 +57,7 @@ ETF_COSTS = {
 # 모델 파라미터 설정
 MODEL_PARAMS = {
     'lookback_months': 36,
-    'tau': 0.05,
+    'tau': 5.0,
     'max_weight': 0.25, # 개별 자산 최대 비중
     'market_proxy_ticker': 'SPY',
     'view_outperformance': 0.02 / 12
@@ -74,7 +75,7 @@ USE_DYNAMIC_OMEGA = True
 
 # 자산 그룹 및 제약 조건 설정
 ASSET_GROUPS = {
-    'US_EQUITY': ['SPY', 'QQQ', 'IWM', 'VTI', 'MDY', 'DIA', 'RSP', 'VTV', 'VUG', 'MTUM', 'QUAL', 'USMV', 'SCHD'],
+    'US_EQUITY': ['SPY', 'QQQ', 'QQQQ', 'IWM', 'VTI', 'MDY', 'DIA', 'RSP', 'VTV', 'VUG', 'MTUM', 'QUAL', 'USMV', 'SCHD'],
     'US_SECTOR': ['XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLP'],
     'INTL_EQUITY': ['VEA', 'VWO', 'EWJ', 'VGK'],
     'FIXED_INCOME': ['AGG', 'TLT', 'TIP', 'HYG'],
