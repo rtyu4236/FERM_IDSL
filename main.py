@@ -16,6 +16,8 @@ if __name__ == '__main__':
         start_year=config.START_YEAR, 
         end_year=config.END_YEAR,
         etf_costs=config.ETF_COSTS,
+        asset_groups=config.ASSET_GROUPS,
+        group_constraints=config.GROUP_CONSTRAINTS,
         model_params=config.MODEL_PARAMS,
         benchmark_tickers=config.BENCHMARK_TICKERS
     )
