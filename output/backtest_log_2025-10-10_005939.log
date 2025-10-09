@@ -1,0 +1,438 @@
+[2025-10-10 00:59:39] [INFO]: 로거 설정 완료
+[2025-10-10 00:59:39] [INFO]: 로그 파일 생성 위치: /Users/a../Desktop/financial_engineering_and risk_management/무제 폴더/PERM_IDSL/output/backtest_log_2025-10-10_005939.log
+[2025-10-10 00:59:41] [INFO]: 백테스트 실행 시작
+[2025-10-10 00:59:41] [INFO]: 백테스트 프로세스 시작
+[2025-10-10 00:59:41] [INFO]: 원시 데이터 파일 로드 시작
+[2025-10-10 00:59:42] [INFO]: 데이터에서 총 31개의 고유 티커 발견
+[2025-10-10 00:59:42] [INFO]: 원시 데이터 로딩 완료
+[2025-10-10 00:59:42] [INFO]: 설정 필터링 기준 티커 수: 31
+[2025-10-10 00:59:42] [INFO]: 설정 필터링 완료
+[2025-10-10 00:59:42] [INFO]: 캐시된 피처 데이터셋 로드: /Users/a../Desktop/financial_engineering_and risk_management/무제 폴더/PERM_IDSL/cache/feature_dataset_stationary_True.feather
+[2025-10-10 00:59:42] [INFO]: 계산된 기본 delta: 3.43
+[2025-10-10 00:59:42] [INFO]: 
+2023-01월 백테스트 처리 시작
+[2025-10-10 00:59:42] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 00:59:42] [WARNING]: 계산된 delta 유효하지 않음 (-1.96), 기본값 3.43 사용
+[2025-10-10 00:59:42] [INFO]: ML 뷰 생성 시작
+[2025-10-10 00:59:42] [ERROR]: DEBUG: Training model with y_train shape=(151,), X_train shape=(151, 11)
+[2025-10-10 00:59:43] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 00:59:44] [ERROR]: DEBUG: Training model with y_train shape=(213,), X_train shape=(213, 11)
+[2025-10-10 00:59:45] [ERROR]: DEBUG: Training model with y_train shape=(143,), X_train shape=(143, 11)
+[2025-10-10 00:59:46] [ERROR]: DEBUG: Training model with y_train shape=(121,), X_train shape=(121, 11)
+[2025-10-10 00:59:49] [ERROR]: DEBUG: Training model with y_train shape=(180,), X_train shape=(180, 11)
+[2025-10-10 00:59:50] [ERROR]: DEBUG: Training model with y_train shape=(221,), X_train shape=(221, 11)
+[2025-10-10 00:59:51] [ERROR]: DEBUG: Training model with y_train shape=(70,), X_train shape=(70, 11)
+[2025-10-10 00:59:53] [ERROR]: DEBUG: Training model with y_train shape=(135,), X_train shape=(135, 11)
+[2025-10-10 00:59:54] [ERROR]: DEBUG: Training model with y_train shape=(68,), X_train shape=(68, 11)
+[2025-10-10 00:59:55] [ERROR]: DEBUG: Training model with y_train shape=(153,), X_train shape=(153, 11)
+[2025-10-10 00:59:56] [ERROR]: DEBUG: Training model with y_train shape=(83,), X_train shape=(83, 11)
+[2025-10-10 00:59:58] [ERROR]: DEBUG: Training model with y_train shape=(129,), X_train shape=(129, 11)
+[2025-10-10 00:59:59] [ERROR]: DEBUG: Training model with y_train shape=(236,), X_train shape=(236, 11)
+[2025-10-10 01:00:00] [ERROR]: DEBUG: Training model with y_train shape=(149,), X_train shape=(149, 11)
+[2025-10-10 01:00:01] [ERROR]: DEBUG: Training model with y_train shape=(161,), X_train shape=(161, 11)
+[2025-10-10 01:00:02] [ERROR]: DEBUG: Training model with y_train shape=(83,), X_train shape=(83, 11)
+[2025-10-10 01:00:04] [ERROR]: DEBUG: Training model with y_train shape=(119,), X_train shape=(119, 11)
+[2025-10-10 01:00:06] [ERROR]: DEBUG: Training model with y_train shape=(139,), X_train shape=(139, 11)
+[2025-10-10 01:00:07] [ERROR]: DEBUG: Training model with y_train shape=(144,), X_train shape=(144, 11)
+[2025-10-10 01:00:08] [ERROR]: DEBUG: Training model with y_train shape=(170,), X_train shape=(170, 11)
+[2025-10-10 01:00:10] [ERROR]: DEBUG: Training model with y_train shape=(148,), X_train shape=(148, 11)
+[2025-10-10 01:00:12] [ERROR]: DEBUG: Training model with y_train shape=(148,), X_train shape=(148, 11)
+[2025-10-10 01:00:14] [ERROR]: DEBUG: Training model with y_train shape=(139,), X_train shape=(139, 11)
+[2025-10-10 01:00:15] [ERROR]: DEBUG: Training model with y_train shape=(191,), X_train shape=(191, 11)
+[2025-10-10 01:00:18] [ERROR]: DEBUG: Training model with y_train shape=(191,), X_train shape=(191, 11)
+[2025-10-10 01:00:21] [ERROR]: DEBUG: Training model with y_train shape=(191,), X_train shape=(191, 11)
+[2025-10-10 01:00:24] [ERROR]: DEBUG: Training model with y_train shape=(191,), X_train shape=(191, 11)
+[2025-10-10 01:00:27] [ERROR]: DEBUG: Training model with y_train shape=(191,), X_train shape=(191, 11)
+[2025-10-10 01:00:30] [ERROR]: DEBUG: Training model with y_train shape=(191,), X_train shape=(191, 11)
+[2025-10-10 01:00:32] [INFO]: MTUM가 SPY 능가 예상
+[2025-10-10 01:00:32] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000039 추가
+[2025-10-10 01:00:32] [INFO]: SPY가 USMV 능가 예상
+[2025-10-10 01:00:32] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000035 추가
+[2025-10-10 01:00:32] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:00:32] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:00:32] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:00:32] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:00:32] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:00:32] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:00:32] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:00:33] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:00:33] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:00:33] [INFO]: 24개 종목: AGG 0.0756, DIA 0.0167, IWM 0.0032, MTUM 0.0470, QQQ 0.0003, QUAL 0.0212, RSP 0.0003, SCHD 0.0619, SPY 0.0574, TIP 0.0078, TLT 0.0214, VEA 0.0664, VGK 0.0529, VNQ 0.0348, VTI 0.0755, VTV 0.0710, VUG 0.0710, VWO 0.0529, XLE 0.0438, XLF 0.0438, XLI 0.0438, XLK 0.0438, XLP 0.0438, XLV 0.0438
+[2025-10-10 01:00:33] [INFO]: 
+2023-02월 백테스트 처리 시작
+[2025-10-10 01:00:33] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:00:33] [WARNING]: 계산된 delta 유효하지 않음 (-1.24), 기본값 3.43 사용
+[2025-10-10 01:00:33] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:00:33] [ERROR]: DEBUG: Training model with y_train shape=(152,), X_train shape=(152, 11)
+[2025-10-10 01:00:34] [ERROR]: DEBUG: Training model with y_train shape=(199,), X_train shape=(199, 11)
+[2025-10-10 01:00:35] [ERROR]: DEBUG: Training model with y_train shape=(214,), X_train shape=(214, 11)
+[2025-10-10 01:00:37] [ERROR]: DEBUG: Training model with y_train shape=(144,), X_train shape=(144, 11)
+[2025-10-10 01:00:38] [ERROR]: DEBUG: Training model with y_train shape=(122,), X_train shape=(122, 11)
+[2025-10-10 01:00:40] [ERROR]: DEBUG: Training model with y_train shape=(181,), X_train shape=(181, 11)
+[2025-10-10 01:00:41] [ERROR]: DEBUG: Training model with y_train shape=(222,), X_train shape=(222, 11)
+[2025-10-10 01:00:42] [ERROR]: DEBUG: Training model with y_train shape=(71,), X_train shape=(71, 11)
+[2025-10-10 01:00:45] [ERROR]: DEBUG: Training model with y_train shape=(136,), X_train shape=(136, 11)
+[2025-10-10 01:00:48] [ERROR]: DEBUG: Training model with y_train shape=(69,), X_train shape=(69, 11)
+[2025-10-10 01:00:49] [ERROR]: DEBUG: Training model with y_train shape=(154,), X_train shape=(154, 11)
+[2025-10-10 01:00:51] [ERROR]: DEBUG: Training model with y_train shape=(84,), X_train shape=(84, 11)
+[2025-10-10 01:00:54] [ERROR]: DEBUG: Training model with y_train shape=(130,), X_train shape=(130, 11)
+[2025-10-10 01:00:55] [ERROR]: DEBUG: Training model with y_train shape=(237,), X_train shape=(237, 11)
+[2025-10-10 01:00:57] [ERROR]: DEBUG: Training model with y_train shape=(150,), X_train shape=(150, 11)
+[2025-10-10 01:00:58] [ERROR]: DEBUG: Training model with y_train shape=(162,), X_train shape=(162, 11)
+[2025-10-10 01:00:59] [ERROR]: DEBUG: Training model with y_train shape=(84,), X_train shape=(84, 11)
+[2025-10-10 01:01:01] [ERROR]: DEBUG: Training model with y_train shape=(120,), X_train shape=(120, 11)
+[2025-10-10 01:01:03] [ERROR]: DEBUG: Training model with y_train shape=(140,), X_train shape=(140, 11)
+[2025-10-10 01:01:05] [ERROR]: DEBUG: Training model with y_train shape=(145,), X_train shape=(145, 11)
+[2025-10-10 01:01:07] [ERROR]: DEBUG: Training model with y_train shape=(171,), X_train shape=(171, 11)
+[2025-10-10 01:01:09] [ERROR]: DEBUG: Training model with y_train shape=(149,), X_train shape=(149, 11)
+[2025-10-10 01:01:11] [ERROR]: DEBUG: Training model with y_train shape=(149,), X_train shape=(149, 11)
+[2025-10-10 01:01:12] [ERROR]: DEBUG: Training model with y_train shape=(140,), X_train shape=(140, 11)
+[2025-10-10 01:01:13] [ERROR]: DEBUG: Training model with y_train shape=(192,), X_train shape=(192, 11)
+[2025-10-10 01:01:16] [ERROR]: DEBUG: Training model with y_train shape=(192,), X_train shape=(192, 11)
+[2025-10-10 01:01:19] [ERROR]: DEBUG: Training model with y_train shape=(192,), X_train shape=(192, 11)
+[2025-10-10 01:01:23] [ERROR]: DEBUG: Training model with y_train shape=(192,), X_train shape=(192, 11)
+[2025-10-10 01:01:26] [ERROR]: DEBUG: Training model with y_train shape=(192,), X_train shape=(192, 11)
+[2025-10-10 01:01:29] [ERROR]: DEBUG: Training model with y_train shape=(192,), X_train shape=(192, 11)
+[2025-10-10 01:01:31] [INFO]: MTUM가 SPY 능가 예상
+[2025-10-10 01:01:31] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000038 추가
+[2025-10-10 01:01:31] [INFO]: SPY가 USMV 능가 예상
+[2025-10-10 01:01:31] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000035 추가
+[2025-10-10 01:01:31] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:01:31] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:01:31] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:01:31] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:01:31] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:01:31] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:01:31] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:01:31] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:01:31] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:01:31] [INFO]: 24개 종목: AGG 0.0725, DIA 0.0191, IWM 0.0068, MTUM 0.0467, QQQ 0.0027, QUAL 0.0232, RSP 0.0027, SCHD 0.0601, SPY 0.0567, TIP 0.0109, TLT 0.0233, VEA 0.0643, VGK 0.0519, VNQ 0.0355, VTI 0.0725, VTV 0.0684, VUG 0.0684, VWO 0.0519, XLE 0.0437, XLF 0.0437, XLI 0.0437, XLK 0.0437, XLP 0.0437, XLV 0.0437
+[2025-10-10 01:01:31] [INFO]: 
+2023-03월 백테스트 처리 시작
+[2025-10-10 01:01:31] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:01:31] [WARNING]: 계산된 delta 유효하지 않음 (-0.07), 기본값 3.43 사용
+[2025-10-10 01:01:31] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:01:31] [ERROR]: DEBUG: Training model with y_train shape=(153,), X_train shape=(153, 11)
+[2025-10-10 01:01:33] [ERROR]: DEBUG: Training model with y_train shape=(200,), X_train shape=(200, 11)
+[2025-10-10 01:01:35] [ERROR]: DEBUG: Training model with y_train shape=(215,), X_train shape=(215, 11)
+[2025-10-10 01:01:37] [ERROR]: DEBUG: Training model with y_train shape=(145,), X_train shape=(145, 11)
+[2025-10-10 01:01:38] [ERROR]: DEBUG: Training model with y_train shape=(123,), X_train shape=(123, 11)
+[2025-10-10 01:01:40] [ERROR]: DEBUG: Training model with y_train shape=(182,), X_train shape=(182, 11)
+[2025-10-10 01:01:41] [ERROR]: DEBUG: Training model with y_train shape=(223,), X_train shape=(223, 11)
+[2025-10-10 01:01:42] [ERROR]: DEBUG: Training model with y_train shape=(72,), X_train shape=(72, 11)
+[2025-10-10 01:01:43] [ERROR]: DEBUG: Training model with y_train shape=(137,), X_train shape=(137, 11)
+[2025-10-10 01:01:45] [ERROR]: DEBUG: Training model with y_train shape=(70,), X_train shape=(70, 11)
+[2025-10-10 01:01:46] [ERROR]: DEBUG: Training model with y_train shape=(155,), X_train shape=(155, 11)
+[2025-10-10 01:01:47] [ERROR]: DEBUG: Training model with y_train shape=(85,), X_train shape=(85, 11)
+[2025-10-10 01:01:49] [ERROR]: DEBUG: Training model with y_train shape=(131,), X_train shape=(131, 11)
+[2025-10-10 01:01:50] [ERROR]: DEBUG: Training model with y_train shape=(238,), X_train shape=(238, 11)
+[2025-10-10 01:01:52] [ERROR]: DEBUG: Training model with y_train shape=(151,), X_train shape=(151, 11)
+[2025-10-10 01:01:55] [ERROR]: DEBUG: Training model with y_train shape=(163,), X_train shape=(163, 11)
+[2025-10-10 01:01:57] [ERROR]: DEBUG: Training model with y_train shape=(85,), X_train shape=(85, 11)
+[2025-10-10 01:01:59] [ERROR]: DEBUG: Training model with y_train shape=(121,), X_train shape=(121, 11)
+[2025-10-10 01:02:01] [ERROR]: DEBUG: Training model with y_train shape=(141,), X_train shape=(141, 11)
+[2025-10-10 01:02:03] [ERROR]: DEBUG: Training model with y_train shape=(146,), X_train shape=(146, 11)
+[2025-10-10 01:02:04] [ERROR]: DEBUG: Training model with y_train shape=(172,), X_train shape=(172, 11)
+[2025-10-10 01:02:05] [ERROR]: DEBUG: Training model with y_train shape=(150,), X_train shape=(150, 11)
+[2025-10-10 01:02:06] [ERROR]: DEBUG: Training model with y_train shape=(150,), X_train shape=(150, 11)
+[2025-10-10 01:02:08] [ERROR]: DEBUG: Training model with y_train shape=(141,), X_train shape=(141, 11)
+[2025-10-10 01:02:10] [ERROR]: DEBUG: Training model with y_train shape=(193,), X_train shape=(193, 11)
+[2025-10-10 01:02:13] [ERROR]: DEBUG: Training model with y_train shape=(193,), X_train shape=(193, 11)
+[2025-10-10 01:02:16] [ERROR]: DEBUG: Training model with y_train shape=(193,), X_train shape=(193, 11)
+[2025-10-10 01:02:19] [ERROR]: DEBUG: Training model with y_train shape=(193,), X_train shape=(193, 11)
+[2025-10-10 01:02:22] [ERROR]: DEBUG: Training model with y_train shape=(193,), X_train shape=(193, 11)
+[2025-10-10 01:02:24] [ERROR]: DEBUG: Training model with y_train shape=(193,), X_train shape=(193, 11)
+[2025-10-10 01:02:27] [INFO]: AGG가 SPY 능가 예상
+[2025-10-10 01:02:27] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000034 추가
+[2025-10-10 01:02:27] [INFO]: SPY가 USMV 능가 예상
+[2025-10-10 01:02:27] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000035 추가
+[2025-10-10 01:02:27] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:02:27] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:02:27] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:02:27] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:02:27] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:02:27] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:02:27] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:02:27] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:02:27] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:02:27] [INFO]: 24개 종목: AGG 0.1122, DIA 0.0177, IWM 0.0046, MTUM 0.0220, QQQ 0.0009, QUAL 0.0220, RSP 0.0009, SCHD 0.0612, SPY 0.0452, TIP 0.0090, TLT 0.0220, VEA 0.0655, VGK 0.0525, VNQ 0.0351, VTI 0.0742, VTV 0.0699, VUG 0.0699, VWO 0.0525, XLE 0.0438, XLF 0.0438, XLI 0.0438, XLK 0.0438, XLP 0.0438, XLV 0.0438
+[2025-10-10 01:02:27] [WARNING]: 
+2023-04-30 수익률 데이터 없음, 해당 월 수익률을 0으로 처리
+[2025-10-10 01:02:27] [INFO]: 
+2023-05월 백테스트 처리 시작
+[2025-10-10 01:02:27] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:02:27] [WARNING]: 계산된 delta 유효하지 않음 (-1.02), 기본값 3.43 사용
+[2025-10-10 01:02:27] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:02:27] [ERROR]: DEBUG: Training model with y_train shape=(154,), X_train shape=(154, 11)
+[2025-10-10 01:02:28] [ERROR]: DEBUG: Training model with y_train shape=(201,), X_train shape=(201, 11)
+[2025-10-10 01:02:30] [ERROR]: DEBUG: Training model with y_train shape=(216,), X_train shape=(216, 11)
+[2025-10-10 01:02:31] [ERROR]: DEBUG: Training model with y_train shape=(146,), X_train shape=(146, 11)
+[2025-10-10 01:02:32] [ERROR]: DEBUG: Training model with y_train shape=(124,), X_train shape=(124, 11)
+[2025-10-10 01:02:33] [ERROR]: DEBUG: Training model with y_train shape=(183,), X_train shape=(183, 11)
+[2025-10-10 01:02:34] [ERROR]: DEBUG: Training model with y_train shape=(224,), X_train shape=(224, 11)
+[2025-10-10 01:02:35] [ERROR]: DEBUG: Training model with y_train shape=(73,), X_train shape=(73, 11)
+[2025-10-10 01:02:36] [ERROR]: DEBUG: Training model with y_train shape=(138,), X_train shape=(138, 11)
+[2025-10-10 01:02:38] [ERROR]: DEBUG: Training model with y_train shape=(71,), X_train shape=(71, 11)
+[2025-10-10 01:02:40] [ERROR]: DEBUG: Training model with y_train shape=(156,), X_train shape=(156, 11)
+[2025-10-10 01:02:41] [ERROR]: DEBUG: Training model with y_train shape=(86,), X_train shape=(86, 11)
+[2025-10-10 01:02:43] [ERROR]: DEBUG: Training model with y_train shape=(132,), X_train shape=(132, 11)
+[2025-10-10 01:02:44] [ERROR]: DEBUG: Training model with y_train shape=(239,), X_train shape=(239, 11)
+[2025-10-10 01:02:46] [ERROR]: DEBUG: Training model with y_train shape=(152,), X_train shape=(152, 11)
+[2025-10-10 01:02:47] [ERROR]: DEBUG: Training model with y_train shape=(164,), X_train shape=(164, 11)
+[2025-10-10 01:02:48] [ERROR]: DEBUG: Training model with y_train shape=(86,), X_train shape=(86, 11)
+[2025-10-10 01:02:50] [ERROR]: DEBUG: Training model with y_train shape=(122,), X_train shape=(122, 11)
+[2025-10-10 01:02:51] [ERROR]: DEBUG: Training model with y_train shape=(142,), X_train shape=(142, 11)
+[2025-10-10 01:02:52] [ERROR]: DEBUG: Training model with y_train shape=(147,), X_train shape=(147, 11)
+[2025-10-10 01:02:54] [ERROR]: DEBUG: Training model with y_train shape=(173,), X_train shape=(173, 11)
+[2025-10-10 01:02:55] [ERROR]: DEBUG: Training model with y_train shape=(151,), X_train shape=(151, 11)
+[2025-10-10 01:02:57] [ERROR]: DEBUG: Training model with y_train shape=(151,), X_train shape=(151, 11)
+[2025-10-10 01:02:58] [ERROR]: DEBUG: Training model with y_train shape=(142,), X_train shape=(142, 11)
+[2025-10-10 01:02:59] [ERROR]: DEBUG: Training model with y_train shape=(194,), X_train shape=(194, 11)
+[2025-10-10 01:03:01] [ERROR]: DEBUG: Training model with y_train shape=(194,), X_train shape=(194, 11)
+[2025-10-10 01:03:04] [ERROR]: DEBUG: Training model with y_train shape=(194,), X_train shape=(194, 11)
+[2025-10-10 01:03:06] [ERROR]: DEBUG: Training model with y_train shape=(194,), X_train shape=(194, 11)
+[2025-10-10 01:03:08] [ERROR]: DEBUG: Training model with y_train shape=(194,), X_train shape=(194, 11)
+[2025-10-10 01:03:10] [ERROR]: DEBUG: Training model with y_train shape=(194,), X_train shape=(194, 11)
+[2025-10-10 01:03:12] [INFO]: MTUM가 SPY 능가 예상
+[2025-10-10 01:03:12] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000038 추가
+[2025-10-10 01:03:12] [INFO]: SPY가 USMV 능가 예상
+[2025-10-10 01:03:12] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000035 추가
+[2025-10-10 01:03:12] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:03:12] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:03:12] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:03:12] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:03:12] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:03:12] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:03:12] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:03:12] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:03:12] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:03:12] [INFO]: 26개 종목: AGG 0.0679, DIA 0.0224, IWM 0.0119, MDY 0.0001, MTUM 0.0461, QQQ 0.0084, QUAL 0.0259, RSP 0.0084, SCHD 0.0574, SPY 0.0555, TIP 0.0154, TLT 0.0259, USMV 0.0000, VEA 0.0609, VGK 0.0504, VNQ 0.0364, VTI 0.0679, VTV 0.0644, VUG 0.0644, VWO 0.0504, XLE 0.0434, XLF 0.0434, XLI 0.0434, XLK 0.0434, XLP 0.0434, XLV 0.0434
+[2025-10-10 01:03:13] [INFO]: 
+2023-06월 백테스트 처리 시작
+[2025-10-10 01:03:13] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:03:13] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:03:13] [ERROR]: DEBUG: Training model with y_train shape=(155,), X_train shape=(155, 11)
+[2025-10-10 01:03:13] [ERROR]: DEBUG: Training model with y_train shape=(202,), X_train shape=(202, 11)
+[2025-10-10 01:03:15] [ERROR]: DEBUG: Training model with y_train shape=(217,), X_train shape=(217, 11)
+[2025-10-10 01:03:16] [ERROR]: DEBUG: Training model with y_train shape=(147,), X_train shape=(147, 11)
+[2025-10-10 01:03:17] [ERROR]: DEBUG: Training model with y_train shape=(125,), X_train shape=(125, 11)
+[2025-10-10 01:03:19] [ERROR]: DEBUG: Training model with y_train shape=(184,), X_train shape=(184, 11)
+[2025-10-10 01:03:19] [ERROR]: DEBUG: Training model with y_train shape=(225,), X_train shape=(225, 11)
+[2025-10-10 01:03:22] [ERROR]: DEBUG: Training model with y_train shape=(74,), X_train shape=(74, 11)
+[2025-10-10 01:03:23] [ERROR]: DEBUG: Training model with y_train shape=(139,), X_train shape=(139, 11)
+[2025-10-10 01:03:24] [ERROR]: DEBUG: Training model with y_train shape=(72,), X_train shape=(72, 11)
+[2025-10-10 01:03:25] [ERROR]: DEBUG: Training model with y_train shape=(157,), X_train shape=(157, 11)
+[2025-10-10 01:03:26] [ERROR]: DEBUG: Training model with y_train shape=(87,), X_train shape=(87, 11)
+[2025-10-10 01:03:27] [ERROR]: DEBUG: Training model with y_train shape=(133,), X_train shape=(133, 11)
+[2025-10-10 01:03:28] [ERROR]: DEBUG: Training model with y_train shape=(240,), X_train shape=(240, 11)
+[2025-10-10 01:03:31] [ERROR]: DEBUG: Training model with y_train shape=(153,), X_train shape=(153, 11)
+[2025-10-10 01:03:32] [ERROR]: DEBUG: Training model with y_train shape=(165,), X_train shape=(165, 11)
+[2025-10-10 01:03:33] [ERROR]: DEBUG: Training model with y_train shape=(87,), X_train shape=(87, 11)
+[2025-10-10 01:03:34] [ERROR]: DEBUG: Training model with y_train shape=(123,), X_train shape=(123, 11)
+[2025-10-10 01:03:35] [ERROR]: DEBUG: Training model with y_train shape=(143,), X_train shape=(143, 11)
+[2025-10-10 01:03:37] [ERROR]: DEBUG: Training model with y_train shape=(148,), X_train shape=(148, 11)
+[2025-10-10 01:03:38] [ERROR]: DEBUG: Training model with y_train shape=(174,), X_train shape=(174, 11)
+[2025-10-10 01:03:39] [ERROR]: DEBUG: Training model with y_train shape=(152,), X_train shape=(152, 11)
+[2025-10-10 01:03:41] [ERROR]: DEBUG: Training model with y_train shape=(152,), X_train shape=(152, 11)
+[2025-10-10 01:03:42] [ERROR]: DEBUG: Training model with y_train shape=(143,), X_train shape=(143, 11)
+[2025-10-10 01:03:44] [ERROR]: DEBUG: Training model with y_train shape=(195,), X_train shape=(195, 11)
+[2025-10-10 01:03:47] [ERROR]: DEBUG: Training model with y_train shape=(195,), X_train shape=(195, 11)
+[2025-10-10 01:03:50] [ERROR]: DEBUG: Training model with y_train shape=(195,), X_train shape=(195, 11)
+[2025-10-10 01:03:53] [ERROR]: DEBUG: Training model with y_train shape=(195,), X_train shape=(195, 11)
+[2025-10-10 01:03:55] [ERROR]: DEBUG: Training model with y_train shape=(195,), X_train shape=(195, 11)
+[2025-10-10 01:03:58] [ERROR]: DEBUG: Training model with y_train shape=(195,), X_train shape=(195, 11)
+[2025-10-10 01:04:02] [INFO]: TLT가 SPY 능가 예상
+[2025-10-10 01:04:02] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000032 추가
+[2025-10-10 01:04:02] [INFO]: SPY가 USMV 능가 예상
+[2025-10-10 01:04:02] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000035 추가
+[2025-10-10 01:04:02] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:04:02] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:04:02] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:04:02] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:04:02] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:04:02] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:04:02] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:04:02] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:04:02] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:04:02] [INFO]: 17개 종목: AGG 0.1455, SCHD 0.0895, SPY 0.0413, TLT 0.0236, VEA 0.1082, VGK 0.0521, VNQ 0.0001, VTI 0.1455, VTV 0.1268, VUG 0.1268, VWO 0.0521, XLE 0.0147, XLF 0.0147, XLI 0.0147, XLK 0.0147, XLP 0.0147, XLV 0.0147
+[2025-10-10 01:04:02] [INFO]: 
+2023-07월 백테스트 처리 시작
+[2025-10-10 01:04:02] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:04:02] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:04:02] [ERROR]: DEBUG: Training model with y_train shape=(156,), X_train shape=(156, 11)
+[2025-10-10 01:04:03] [ERROR]: DEBUG: Training model with y_train shape=(203,), X_train shape=(203, 11)
+[2025-10-10 01:04:05] [ERROR]: DEBUG: Training model with y_train shape=(218,), X_train shape=(218, 11)
+[2025-10-10 01:04:07] [ERROR]: DEBUG: Training model with y_train shape=(148,), X_train shape=(148, 11)
+[2025-10-10 01:04:08] [ERROR]: DEBUG: Training model with y_train shape=(126,), X_train shape=(126, 11)
+[2025-10-10 01:04:10] [ERROR]: DEBUG: Training model with y_train shape=(185,), X_train shape=(185, 11)
+[2025-10-10 01:04:10] [ERROR]: DEBUG: Training model with y_train shape=(226,), X_train shape=(226, 11)
+[2025-10-10 01:04:13] [ERROR]: DEBUG: Training model with y_train shape=(75,), X_train shape=(75, 11)
+[2025-10-10 01:04:14] [ERROR]: DEBUG: Training model with y_train shape=(140,), X_train shape=(140, 11)
+[2025-10-10 01:04:16] [ERROR]: DEBUG: Training model with y_train shape=(73,), X_train shape=(73, 11)
+[2025-10-10 01:04:18] [ERROR]: DEBUG: Training model with y_train shape=(158,), X_train shape=(158, 11)
+[2025-10-10 01:04:18] [ERROR]: DEBUG: Training model with y_train shape=(88,), X_train shape=(88, 11)
+[2025-10-10 01:04:20] [ERROR]: DEBUG: Training model with y_train shape=(134,), X_train shape=(134, 11)
+[2025-10-10 01:04:21] [ERROR]: DEBUG: Training model with y_train shape=(241,), X_train shape=(241, 11)
+[2025-10-10 01:04:22] [ERROR]: DEBUG: Training model with y_train shape=(154,), X_train shape=(154, 11)
+[2025-10-10 01:04:24] [ERROR]: DEBUG: Training model with y_train shape=(166,), X_train shape=(166, 11)
+[2025-10-10 01:04:25] [ERROR]: DEBUG: Training model with y_train shape=(88,), X_train shape=(88, 11)
+[2025-10-10 01:04:27] [ERROR]: DEBUG: Training model with y_train shape=(124,), X_train shape=(124, 11)
+[2025-10-10 01:04:28] [ERROR]: DEBUG: Training model with y_train shape=(144,), X_train shape=(144, 11)
+[2025-10-10 01:04:30] [ERROR]: DEBUG: Training model with y_train shape=(149,), X_train shape=(149, 11)
+[2025-10-10 01:04:31] [ERROR]: DEBUG: Training model with y_train shape=(175,), X_train shape=(175, 11)
+[2025-10-10 01:04:32] [ERROR]: DEBUG: Training model with y_train shape=(153,), X_train shape=(153, 11)
+[2025-10-10 01:04:33] [ERROR]: DEBUG: Training model with y_train shape=(153,), X_train shape=(153, 11)
+[2025-10-10 01:04:35] [ERROR]: DEBUG: Training model with y_train shape=(144,), X_train shape=(144, 11)
+[2025-10-10 01:04:36] [ERROR]: DEBUG: Training model with y_train shape=(196,), X_train shape=(196, 11)
+[2025-10-10 01:04:39] [ERROR]: DEBUG: Training model with y_train shape=(196,), X_train shape=(196, 11)
+[2025-10-10 01:04:42] [ERROR]: DEBUG: Training model with y_train shape=(196,), X_train shape=(196, 11)
+[2025-10-10 01:04:45] [ERROR]: DEBUG: Training model with y_train shape=(196,), X_train shape=(196, 11)
+[2025-10-10 01:04:47] [ERROR]: DEBUG: Training model with y_train shape=(196,), X_train shape=(196, 11)
+[2025-10-10 01:04:50] [ERROR]: DEBUG: Training model with y_train shape=(196,), X_train shape=(196, 11)
+[2025-10-10 01:04:53] [INFO]: TLT가 SPY 능가 예상
+[2025-10-10 01:04:53] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000032 추가
+[2025-10-10 01:04:53] [INFO]: SPY가 USMV 능가 예상
+[2025-10-10 01:04:53] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000035 추가
+[2025-10-10 01:04:53] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:04:53] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:04:53] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:04:53] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:04:53] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:04:53] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:04:53] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:04:53] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:04:53] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:04:53] [INFO]: 26개 종목: AGG 0.0580, DIA 0.0280, IWM 0.0211, MDY 0.0119, MTUM 0.0303, QQQ 0.0188, QUAL 0.0303, RSP 0.0188, SCHD 0.0510, SPY 0.0503, TIP 0.0234, TLT 0.0437, USMV 0.0108, VEA 0.0533, VGK 0.0464, VNQ 0.0372, VTI 0.0580, VTV 0.0557, VUG 0.0557, VWO 0.0464, XLE 0.0418, XLF 0.0418, XLI 0.0418, XLK 0.0418, XLP 0.0418, XLV 0.0418
+[2025-10-10 01:04:53] [INFO]: 
+2023-08월 백테스트 처리 시작
+[2025-10-10 01:04:53] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:04:53] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:04:53] [ERROR]: DEBUG: Training model with y_train shape=(157,), X_train shape=(157, 11)
+[2025-10-10 01:04:54] [ERROR]: DEBUG: Training model with y_train shape=(204,), X_train shape=(204, 11)
+[2025-10-10 01:04:56] [ERROR]: DEBUG: Training model with y_train shape=(219,), X_train shape=(219, 11)
+[2025-10-10 01:04:58] [ERROR]: DEBUG: Training model with y_train shape=(149,), X_train shape=(149, 11)
+[2025-10-10 01:04:59] [ERROR]: DEBUG: Training model with y_train shape=(127,), X_train shape=(127, 11)
+[2025-10-10 01:05:01] [ERROR]: DEBUG: Training model with y_train shape=(186,), X_train shape=(186, 11)
+[2025-10-10 01:05:02] [ERROR]: DEBUG: Training model with y_train shape=(227,), X_train shape=(227, 11)
+[2025-10-10 01:05:03] [ERROR]: DEBUG: Training model with y_train shape=(76,), X_train shape=(76, 11)
+[2025-10-10 01:05:04] [ERROR]: DEBUG: Training model with y_train shape=(141,), X_train shape=(141, 11)
+[2025-10-10 01:05:06] [ERROR]: DEBUG: Training model with y_train shape=(74,), X_train shape=(74, 11)
+[2025-10-10 01:05:07] [ERROR]: DEBUG: Training model with y_train shape=(159,), X_train shape=(159, 11)
+[2025-10-10 01:05:08] [ERROR]: DEBUG: Training model with y_train shape=(89,), X_train shape=(89, 11)
+[2025-10-10 01:05:09] [ERROR]: DEBUG: Training model with y_train shape=(135,), X_train shape=(135, 11)
+[2025-10-10 01:05:10] [ERROR]: DEBUG: Training model with y_train shape=(242,), X_train shape=(242, 11)
+[2025-10-10 01:05:13] [ERROR]: DEBUG: Training model with y_train shape=(155,), X_train shape=(155, 11)
+[2025-10-10 01:05:15] [ERROR]: DEBUG: Training model with y_train shape=(167,), X_train shape=(167, 11)
+[2025-10-10 01:05:16] [ERROR]: DEBUG: Training model with y_train shape=(89,), X_train shape=(89, 11)
+[2025-10-10 01:05:17] [ERROR]: DEBUG: Training model with y_train shape=(125,), X_train shape=(125, 11)
+[2025-10-10 01:05:18] [ERROR]: DEBUG: Training model with y_train shape=(145,), X_train shape=(145, 11)
+[2025-10-10 01:05:20] [ERROR]: DEBUG: Training model with y_train shape=(150,), X_train shape=(150, 11)
+[2025-10-10 01:05:21] [ERROR]: DEBUG: Training model with y_train shape=(176,), X_train shape=(176, 11)
+[2025-10-10 01:05:22] [ERROR]: DEBUG: Training model with y_train shape=(154,), X_train shape=(154, 11)
+[2025-10-10 01:05:23] [ERROR]: DEBUG: Training model with y_train shape=(154,), X_train shape=(154, 11)
+[2025-10-10 01:05:24] [ERROR]: DEBUG: Training model with y_train shape=(145,), X_train shape=(145, 11)
+[2025-10-10 01:05:26] [ERROR]: DEBUG: Training model with y_train shape=(197,), X_train shape=(197, 11)
+[2025-10-10 01:05:29] [ERROR]: DEBUG: Training model with y_train shape=(197,), X_train shape=(197, 11)
+[2025-10-10 01:05:32] [ERROR]: DEBUG: Training model with y_train shape=(197,), X_train shape=(197, 11)
+[2025-10-10 01:05:34] [ERROR]: DEBUG: Training model with y_train shape=(197,), X_train shape=(197, 11)
+[2025-10-10 01:05:36] [ERROR]: DEBUG: Training model with y_train shape=(197,), X_train shape=(197, 11)
+[2025-10-10 01:05:39] [ERROR]: DEBUG: Training model with y_train shape=(197,), X_train shape=(197, 11)
+[2025-10-10 01:05:41] [INFO]: TIP가 SPY 능가 예상
+[2025-10-10 01:05:41] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000033 추가
+[2025-10-10 01:05:41] [INFO]: SPY가 QQQ 능가 예상
+[2025-10-10 01:05:41] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000031 추가
+[2025-10-10 01:05:41] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:05:41] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:05:41] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:05:41] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:05:41] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:05:41] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:05:41] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:05:41] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:05:41] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:05:41] [INFO]: 25개 종목: AGG 0.0659, DIA 0.0226, IWM 0.0126, MDY 0.0003, MTUM 0.0259, QUAL 0.0259, RSP 0.0093, SCHD 0.0559, SPY 0.0567, TIP 0.0327, TLT 0.0259, USMV 0.0259, VEA 0.0592, VGK 0.0493, VNQ 0.0359, VTI 0.0659, VTV 0.0626, VUG 0.0626, VWO 0.0493, XLE 0.0426, XLF 0.0426, XLI 0.0426, XLK 0.0426, XLP 0.0426, XLV 0.0426
+[2025-10-10 01:05:41] [WARNING]: 
+2023-09-30 수익률 데이터 없음, 해당 월 수익률을 0으로 처리
+[2025-10-10 01:05:41] [INFO]: 
+2023-10월 백테스트 처리 시작
+[2025-10-10 01:05:41] [INFO]: 투자 유니버스 (30개): ['AGG', 'DIA', 'EWJ', 'GLD', 'HYG', 'IWM', 'MDY', 'MTUM', 'QQQ', 'QUAL', 'RSP', 'SCHD', 'SLV', 'SPY', 'TIP', 'TLT', 'USMV', 'VEA', 'VGK', 'VNQ', 'VTI', 'VTV', 'VUG', 'VWO', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLV']
+[2025-10-10 01:05:41] [INFO]: ML 뷰 생성 시작
+[2025-10-10 01:05:41] [ERROR]: DEBUG: Training model with y_train shape=(158,), X_train shape=(158, 11)
+[2025-10-10 01:05:42] [ERROR]: DEBUG: Training model with y_train shape=(205,), X_train shape=(205, 11)
+[2025-10-10 01:05:44] [ERROR]: DEBUG: Training model with y_train shape=(220,), X_train shape=(220, 11)
+[2025-10-10 01:05:46] [ERROR]: DEBUG: Training model with y_train shape=(150,), X_train shape=(150, 11)
+[2025-10-10 01:05:47] [ERROR]: DEBUG: Training model with y_train shape=(128,), X_train shape=(128, 11)
+[2025-10-10 01:05:48] [ERROR]: DEBUG: Training model with y_train shape=(187,), X_train shape=(187, 11)
+[2025-10-10 01:05:49] [ERROR]: DEBUG: Training model with y_train shape=(228,), X_train shape=(228, 11)
+[2025-10-10 01:05:51] [ERROR]: DEBUG: Training model with y_train shape=(77,), X_train shape=(77, 11)
+[2025-10-10 01:05:52] [ERROR]: DEBUG: Training model with y_train shape=(142,), X_train shape=(142, 11)
+[2025-10-10 01:05:54] [ERROR]: DEBUG: Training model with y_train shape=(75,), X_train shape=(75, 11)
+[2025-10-10 01:05:55] [ERROR]: DEBUG: Training model with y_train shape=(160,), X_train shape=(160, 11)
+[2025-10-10 01:05:57] [ERROR]: DEBUG: Training model with y_train shape=(90,), X_train shape=(90, 11)
+[2025-10-10 01:05:59] [ERROR]: DEBUG: Training model with y_train shape=(136,), X_train shape=(136, 11)
+[2025-10-10 01:06:00] [ERROR]: DEBUG: Training model with y_train shape=(243,), X_train shape=(243, 11)
+[2025-10-10 01:06:01] [ERROR]: DEBUG: Training model with y_train shape=(156,), X_train shape=(156, 11)
+[2025-10-10 01:06:03] [ERROR]: DEBUG: Training model with y_train shape=(168,), X_train shape=(168, 11)
+[2025-10-10 01:06:04] [ERROR]: DEBUG: Training model with y_train shape=(90,), X_train shape=(90, 11)
+[2025-10-10 01:06:05] [ERROR]: DEBUG: Training model with y_train shape=(126,), X_train shape=(126, 11)
+[2025-10-10 01:06:07] [ERROR]: DEBUG: Training model with y_train shape=(146,), X_train shape=(146, 11)
+[2025-10-10 01:06:08] [ERROR]: DEBUG: Training model with y_train shape=(151,), X_train shape=(151, 11)
+[2025-10-10 01:06:10] [ERROR]: DEBUG: Training model with y_train shape=(177,), X_train shape=(177, 11)
+[2025-10-10 01:06:11] [ERROR]: DEBUG: Training model with y_train shape=(155,), X_train shape=(155, 11)
+[2025-10-10 01:06:13] [ERROR]: DEBUG: Training model with y_train shape=(155,), X_train shape=(155, 11)
+[2025-10-10 01:06:15] [ERROR]: DEBUG: Training model with y_train shape=(146,), X_train shape=(146, 11)
+[2025-10-10 01:06:16] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 01:06:18] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 01:06:20] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 01:06:22] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 01:06:24] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 01:06:26] [ERROR]: DEBUG: Training model with y_train shape=(198,), X_train shape=(198, 11)
+[2025-10-10 01:06:28] [INFO]: TLT가 SPY 능가 예상
+[2025-10-10 01:06:28] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000032 추가
+[2025-10-10 01:06:28] [INFO]: SPY가 QQQ 능가 예상
+[2025-10-10 01:06:28] [INFO]: 동적 오메가 적용, 기본 불확실성에 0.000031 추가
+[2025-10-10 01:06:28] [ERROR]: DEBUG: Returning P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:06:28] [INFO]: 포트폴리오 구성 시작
+[2025-10-10 01:06:28] [INFO]: 현재투자종목: 30개, AGG, DIA, EWJ, GLD, HYG, IWM, MDY, MTUM, QQQ, QUAL, RSP, SCHD, SLV, SPY, TIP, TLT, USMV, VEA, VGK, VNQ, VTI, VTV, VUG, VWO, XLE, XLF, XLI, XLK, XLP, XLV
+[2025-10-10 01:06:28] [ERROR]: DEBUG: Sigma shape=(30, 30), W_mkt shape=(30,)
+[2025-10-10 01:06:28] [ERROR]: DEBUG: Pi shape=(30,)
+[2025-10-10 01:06:28] [ERROR]: DEBUG: Received P shape=(2, 30), Q shape=(2, 1), Omega shape=(2, 2)
+[2025-10-10 01:06:28] [ERROR]: DEBUG: mu_bl shape=(30,), Sigma_post shape=(30, 30)
+[2025-10-10 01:06:28] [ERROR]: DEBUG: final weights shape=(30,)
+[2025-10-10 01:06:28] [INFO]: 포트폴리오 구성 완료
+[2025-10-10 01:06:28] [INFO]: 26개 종목: AGG 0.0566, DIA 0.0286, IWM 0.0222, MDY 0.0136, MTUM 0.0308, QQQ 0.0009, QUAL 0.0308, RSP 0.0200, SCHD 0.0502, SPY 0.0515, TIP 0.0244, TLT 0.0435, USMV 0.0308, VEA 0.0523, VGK 0.0459, VNQ 0.0373, VTI 0.0566, VTV 0.0545, VUG 0.0545, VWO 0.0459, XLE 0.0416, XLF 0.0416, XLI 0.0416, XLK 0.0416, XLP 0.0416, XLV 0.0416
+[2025-10-10 01:06:28] [INFO]: 
+백테스트 분석 및 리포트 생성
+[2025-10-10 01:06:28] [INFO]: 1/N 포트폴리오 벤치마크 생성 중...
+[2025-10-10 01:06:28] [INFO]: 1/N 포트폴리오 투자 유니버스: 31개 자산 ['SPY', 'QQQ', 'QQQQ', 'IWM', 'VTI', 'MDY', 'DIA', 'RSP', 'VTV', 'VUG', 'MTUM', 'QUAL', 'USMV', 'SCHD', 'XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLP', 'VEA', 'VWO', 'EWJ', 'VGK', 'AGG', 'TLT', 'TIP', 'HYG', 'GLD', 'SLV', 'VNQ']
+[2025-10-10 01:06:28] [INFO]: 1/N 포트폴리오 벤치마크 생성 완료: 8개 시점
+[2025-10-10 01:06:28] [INFO]: 누적 수익률 데이터 저장 완료: /Users/a../Desktop/financial_engineering_and risk_management/무제 폴더/PERM_IDSL/output/cumulative_returns.csv
+[2025-10-10 01:06:28] [INFO]: 최종 누적 수익률: BL_ML_Strategy 0.1784, SPY 0.1794, QQQ 0.1794, 1/N Portfolio 0.1794
+[2025-10-10 01:06:28] [INFO]: 백테스트 실행 완료
+[2025-10-10 01:06:28] [INFO]: 
+결과 시각화 시작
+[2025-10-10 01:06:28] [INFO]: 시각화 및 분석 프로세스 시작
+[2025-10-10 01:06:28] [INFO]: 성과 분석 표 생성을 시작합니다.
+[2025-10-10 01:06:28] [INFO]: 주요 성과 지표 표 생성 중...
+[2025-10-10 01:06:28] [ERROR]: 실패: 메트릭 데이터프레임이 생성되지 않았습니다.
+[2025-10-10 01:06:28] [INFO]: 연도별 수익률 표 생성 중...
+[2025-10-10 01:06:28] [INFO]: Attempting to save dataframe to table_2_annual_returns.png
+[2025-10-10 01:06:28] [INFO]: SUCCESS: Saved table image to /Users/a../Desktop/financial_engineering_and risk_management/무제 폴더/PERM_IDSL/output/table_2_annual_returns.png
+[2025-10-10 01:06:28] [INFO]: 성공: 연도별 수익률 표 저장 완료.
+[2025-10-10 01:06:28] [INFO]: 최악 낙폭 기간 표 생성 중...
+[2025-10-10 01:06:28] [INFO]: Attempting to save dataframe to table_3_drawdown_analysis.png
+[2025-10-10 01:06:28] [INFO]: SUCCESS: Saved table image to /Users/a../Desktop/financial_engineering_and risk_management/무제 폴더/PERM_IDSL/output/table_3_drawdown_analysis.png
+[2025-10-10 01:06:28] [INFO]: 성공: 최악 낙폭 기간 표 저장 완료.
+[2025-10-10 01:06:28] [INFO]: 파마-프렌치 3요인 회귀분석을 시작합니다.
+[2025-10-10 01:06:28] [INFO]: 성공: 파마-프렌치 회귀분석 결과 표 저장 완료.
+[2025-10-10 01:06:28] [INFO]: 누적 수익률 그래프를 생성합니다.
+[2025-10-10 01:06:29] [INFO]: 성공: 누적 수익률 그래프 저장 완료.
+[2025-10-10 01:06:29] [INFO]: 수중 그래프(Underwater Plot)를 생성합니다.
+[2025-10-10 01:06:29] [INFO]: 성공: 수중 그래프 저장 완료.
+[2025-10-10 01:06:29] [INFO]: 추가 분석 그래프(월별 수익률, 롤링 통계) 생성을 시작합니다.
+[2025-10-10 01:06:29] [INFO]: 성공: 월별 수익률 그래프 저장 완료.
+[2025-10-10 01:06:29] [WARNING]: 롤링 통계 그래프 생성 중단: 데이터 기간(8개월)이 롤링 기간(12개월)보다 짧습니다.
+[2025-10-10 01:06:29] [INFO]: 월별 수익률 비교 그래프 생성을 시작합니다.
+[2025-10-10 01:06:29] [INFO]: 성공: 월별 수익률 비교 그래프 저장 완료.
+[2025-10-10 01:06:29] [INFO]: 시각화 및 분석 프로세스 완료
+[2025-10-10 01:06:29] [INFO]: 결과 시각화 완료
