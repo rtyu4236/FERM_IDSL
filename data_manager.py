@@ -67,11 +67,11 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
 
     logger.info("ML 모델용 피처 데이터셋 신규 생성 시작")
 
-    # 1. 타겟 변수 생성: 다음 달의 수익률
+    # 타겟 변수 생성: 다음 달의 수익률
     monthly_returns = monthly_df.pivot_table(index='date', columns='TICKER', values='retx')
     target_returns = monthly_returns.shift(-1)
 
-    # 2. 월별 피처 계산
+    # 월별 피처 계산
     def intra_month_mdd(x):
         "월중 최대 낙폭(MDD) 계산 헬퍼 함수"
         cumulative_returns = (1 + x).cumprod()
@@ -85,7 +85,7 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     ).reset_index()
     features['date'] = features['date'] + pd.offsets.MonthEnd(0)
     
-    # 3. 거시 경제 데이터 준비 (전달받은 데이터 사용)
+    # 거시 경제 데이터 준비 (전달받은 데이터 사용)
     vix_monthly = vix_df.groupby(pd.Grouper(key='date', freq='ME')).agg(
         avg_vix=('^VIX', 'mean'),
         vol_of_vix=('^VIX', 'std')
@@ -94,13 +94,13 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     
     macro_df = pd.merge(vix_monthly, ff_df, on='date', how='left')
 
-    # 4. 모든 데이터 병합
+    # 모든 데이터 병합
     target_returns_long = target_returns.stack().reset_index(name='target_return')
     final_df = pd.merge(features, target_returns_long, on=['date', 'TICKER'], how='left')
     final_df = pd.merge(final_df, macro_df, on='date', how='left')
     final_df = final_df.sort_values(by=['TICKER', 'date']).reset_index(drop=True)
 
-    # 5. 피처 정상성 검증 및 처리
+    # 피처 정상성 검증 및 처리
     if config.CHECK_STATIONARITY:
         logger.info("피처 정상성 검증 및 처리 시작")
         
@@ -124,7 +124,7 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     # 차분 등으로 발생한 결측치 제거
     final_df = final_df.dropna(subset=['target_return'])
 
-    # 6. 시차 피처 생성 (정상성 처리 이후 수행)
+    # 시차 피처 생성 (정상성 처리 이후 수행)
     for lag in [1, 2, 3, 12]:
         final_df[f'realized_vol_lag_{lag}'] = final_df.groupby('TICKER')['realized_vol'].shift(lag)
 

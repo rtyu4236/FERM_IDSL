@@ -39,7 +39,6 @@ def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_
     """
     투자 가능한 자산들로만 구성된 1/N 포트폴리오 벤치마크 생성
     """
-    # ... (기존 코드와 동일)
     try:
         logger.info(f"1/N 포트폴리오 투자 유니버스: {len(investable_tickers)}개 자산 {investable_tickers}")
         
@@ -89,12 +88,8 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
         all_tickers, etf_costs, asset_groups, group_constraints, benchmark_tickers
     )
     
-    # config의 제약조건을 필터링된 그룹에 맞게 업데이트
-    config.ASSET_GROUPS = filtered_asset_groups
-    config.GROUP_CONSTRAINTS = filtered_group_constraints
-
     ml_features_df = data_manager.create_feature_dataset(daily_df, monthly_df, vix_df, ff_df)
-    
+
     # 모델 초기화
     expense_ratios_for_bl = {k: v['expense_ratio'] for k, v in filtered_costs.items()}
     bl_portfolio_model = BlackLittermanPortfolio(
@@ -103,7 +98,9 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
         expense_ratios=expense_ratios_for_bl,
         lookback_months=model_params['lookback_months'],
         tau=model_params['tau'],
-        market_proxy_ticker=model_params['market_proxy_ticker']
+        market_proxy_ticker=model_params['market_proxy_ticker'],
+        asset_groups=filtered_asset_groups,
+        group_constraints=filtered_group_constraints
     )
 
     # 백테스팅 루프
@@ -142,21 +139,21 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
         next_month_returns = monthly_df[monthly_df['date'] == next_month_date]
 
         if next_month_returns.empty:
-            logger.warning(f"\n{next_month_date.strftime('%Y-%m-%d')} 수익률 데이터 없음, 해당 월 백테스트 건너뜀")
-            continue
-
-        if weights is not None and not weights.empty:
-            merged_bl = pd.merge(weights.to_frame('weight'), next_month_returns, left_index=True, right_on='TICKER')
-            raw_bl_return = (merged_bl['weight'] * merged_bl['retx']).sum()
-            
-            holding_costs = (merged_bl['weight'] * merged_bl['TICKER'].map(lambda t: filtered_costs.get(t, {}).get('expense_ratio', 0) / 12)).sum()
-            
-            aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
-            trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda t: filtered_costs.get(t, {}).get('trading_cost_spread', 0.0001))).sum()
-
-            net_bl_return = raw_bl_return - holding_costs - trade_cost
+            logger.warning(f"\n{next_month_date.strftime('%Y-%m-%d')} 수익률 데이터 없음, 해당 월 수익률을 0으로 처리")
+            net_bl_return = 0.0
         else:
-            net_bl_return = 0
+            if weights is not None and not weights.empty:
+                merged_bl = pd.merge(weights.to_frame('weight'), next_month_returns, left_index=True, right_on='TICKER')
+                raw_bl_return = (merged_bl['weight'] * merged_bl['retx']).sum()
+                
+                holding_costs = (merged_bl['weight'] * merged_bl['TICKER'].map(lambda t: filtered_costs.get(t, {}).get('expense_ratio', 0) / 12)).sum()
+                
+                aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
+                trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda t: filtered_costs.get(t, {}).get('trading_cost_spread', 0.0001))).sum()
+
+                net_bl_return = raw_bl_return - holding_costs - trade_cost
+            else:
+                net_bl_return = 0
 
         bl_returns.append(pd.Series([net_bl_return], index=[next_month_date]))
         previous_weights = weights
@@ -194,4 +191,4 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
     final_returns = cumulative_results_df.iloc[-1] - 1
     logger.info("최종 누적 수익률: " + ', '.join([f'{idx} {val:.4f}' for idx, val in final_returns.items()]))
     
-    # ... (QuantStats 리포트 생성 부분은 생략)
+    return ff_df

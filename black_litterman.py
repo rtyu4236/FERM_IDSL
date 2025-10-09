@@ -51,27 +51,28 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker='SPY')
     return long_term_delta
 
 class BlackLittermanPortfolio:
-    """
-    Black-Litterman 포트폴리오 최적화 수행 클래스
+    """Black-Litterman 포트폴리오 최적화 수행.
 
-    - 시장 균형 수익률과 투자자의 주관적 '뷰'를 결합
-    - 전통적 평균-분산 최적화의 한계 극복 목표
+    시장의 균형 수익률과 투자자의 주관적 '뷰'를 결합하여
+    전통적 평균-분산 최적화의 한계를 극복하는 것을 목표로 함.
     """
     
-    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_ticker):
+    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_ticker, asset_groups, group_constraints):
         self.all_returns_df = all_returns_df
         self.ff_df = ff_df
         self.expense_ratios = expense_ratios
         self.lookback_months = lookback_months
         self.tau = tau
         self.market_proxy_ticker = market_proxy_ticker
+        self.asset_groups = asset_groups
+        self.group_constraints = group_constraints
         self.default_delta = _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker)
 
     def _get_current_universe(self, analysis_date):
-        """
-        분석 날짜 기준, 투자 가능 자산 유니버스 결정
-        - lookback_months 동안 데이터가 충분한 자산만 필터링
-        - 모델 안정성 확보 및 비유동성 자산 왜곡 방지
+        """분석 날짜 기준, 투자 가능한 자산 유니버스 결정.
+        
+        lookback_months 기간 동안 데이터가 충분한 자산만 필터링하여
+        모델 안정성을 확보하고 비유동성 자산으로 인한 왜곡을 방지.
         """
         start_date = analysis_date - pd.DateOffset(months=self.lookback_months)
         recent_data = self.all_returns_df[
@@ -140,9 +141,10 @@ class BlackLittermanPortfolio:
         return Sigma, delta, W_mkt
 
     def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None):
-        """Black-Litterman 공식 기반 최종 포트폴리오 가중치 계산
-        - 사후 기대 수익률(mu_bl)과 후험 공분산(Sigma_post) 계산
-        - cvxopt를 사용한 2차 계획법으로 제약조건 하 최적 가중치 결정
+        """Black-Litterman 공식을 기반으로 최종 포트폴리오 가중치 계산.
+
+        사후 기대 수익률(mu_bl)과 사후 공분산(Sigma_post)을 도출한 후,
+        cvxopt를 사용한 2차 계획법으로 제약조건 하에서 최적 가중치를 결정.
         """
         current_tickers, returns_pivot = self._get_current_universe(analysis_date)
         logger.info("포트폴리오 구성 시작")
@@ -156,11 +158,15 @@ class BlackLittermanPortfolio:
         if Sigma is None:
             weights = np.ones(len(current_tickers)) / len(current_tickers)
             return pd.Series(weights, index=current_tickers), None
+        
+        logger.error(f"DEBUG: Sigma shape={Sigma.shape}, W_mkt shape={W_mkt.shape}")
 
         Pi = delta * np.dot(Sigma, W_mkt)
+        logger.error(f"DEBUG: Pi shape={Pi.shape}")
         Sigma_post = Sigma
         
         if P.size > 0:
+            logger.error(f"DEBUG: Received P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
             try:
                 tau_Sigma_inv = np.linalg.inv(self.tau * Sigma)
                 Omega_inv = np.linalg.inv(Omega)
@@ -170,6 +176,7 @@ class BlackLittermanPortfolio:
                 term2 = np.dot(np.dot(P.T, Omega_inv), Q.flatten())
                 mu_bl = np.dot(M, term1 + term2)
                 Sigma_post = Sigma + M
+                logger.error(f"DEBUG: mu_bl shape={mu_bl.shape}, Sigma_post shape={Sigma_post.shape}")
                 if not np.all(np.isfinite(mu_bl)):
                     logger.warning("mu_bl에 유효하지 않은 값 포함, 균형 수익률 사용")
                     mu_bl = Pi
@@ -205,8 +212,8 @@ class BlackLittermanPortfolio:
             G_list.append(np.hstack([np.zeros(n), np.ones(n)]))
             h_list.append(config.MAX_TURNOVER)
             
-            for group_name, constraints in config.GROUP_CONSTRAINTS.items():
-                group_tickers = config.ASSET_GROUPS.get(group_name, [])
+            for group_name, constraints in self.group_constraints.items():
+                group_tickers = self.asset_groups.get(group_name, [])
                 group_row = np.array([1.0 if ticker in group_tickers else 0.0 for ticker in current_tickers])
                 if group_row.sum() > 0:
                     G_list.append(np.hstack([group_row, np.zeros(n)]))
@@ -220,7 +227,7 @@ class BlackLittermanPortfolio:
             A = matrix(np.hstack([np.ones(n), np.zeros(n)])).T
             b = matrix(1.0)
 
-        else: # 기존 방식(제약없는거))
+        else: # 거래 회전율 제약이 없는 경우
             P_opt = matrix(delta * Sigma_post)
             q_opt = matrix(-mu_bl_net)
             
@@ -228,8 +235,8 @@ class BlackLittermanPortfolio:
             h_individual = np.hstack([np.zeros(n), np.full(n, max_weight)])
             
             group_G_rows, group_h_rows = [], []
-            for group_name, constraints in config.GROUP_CONSTRAINTS.items():
-                group_tickers = config.ASSET_GROUPS.get(group_name, [])
+            for group_name, constraints in self.group_constraints.items():
+                group_tickers = self.asset_groups.get(group_name, [])
                 group_row = np.array([1.0 if ticker in group_tickers else 0.0 for ticker in current_tickers])
                 if group_row.sum() > 0:
                     group_G_rows.append(group_row)
@@ -255,12 +262,15 @@ class BlackLittermanPortfolio:
             logger.error(f"CVXOPT 오류 {e}, 동일 가중치로 대체")
             weights = np.ones(n) / n
 
+        logger.error(f"DEBUG: final weights shape={weights.shape}")
         weights[weights < 1e-5] = 0
         weights /= weights.sum()
         portfolio = pd.Series(weights, index=current_tickers)
         
         logger.info("포트폴리오 구성 완료")
-        log_str = ', '.join([f'{idx} {val:.4f}' for idx, val in portfolio[portfolio > 0].round(4).items()])
+        active_portfolio = portfolio[portfolio > 0]
+        assets_log_str = ', '.join([f'{idx} {val:.4f}' for idx, val in active_portfolio.round(4).items()])
+        log_str = f"{len(active_portfolio)}개 종목: {assets_log_str}"
         logger.info(log_str)
         
         return portfolio, mu_bl_net

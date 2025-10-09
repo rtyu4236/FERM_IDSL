@@ -9,7 +9,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-START_YEAR = 2010
+START_YEAR = 2023
 END_YEAR = 2023
 
 # 각 ETF의 연간 운용 보수(expense_ratio)와 평균 매수-매도 스프레드(trading_cost_spread)를 정의
@@ -56,9 +56,9 @@ ETF_COSTS = {
 
 # 모델 파라미터 설정
 MODEL_PARAMS = {
-    'lookback_months': 36,
-    'tau': 5.0,
-    'max_weight': 0.25, # 개별 자산 최대 비중
+    'lookback_months': 12,
+    'tau': 2.0,
+    'max_weight': 0.7, # 개별 자산 최대 비중
     'market_proxy_ticker': 'SPY',
     'view_outperformance': 0.02 / 12
 }
@@ -86,15 +86,15 @@ ASSET_GROUPS = {
 GROUP_CONSTRAINTS = {
     # 그룹명: {'min': 최소비중, 'max': 최대비중}
     'US_EQUITY': {'min': 0.10, 'max': 0.70},
-    'US_SECTOR': {'min': 0.00, 'max': 0.30},
+    'US_SECTOR': {'min': 0.00, 'max': 0.50},
     'INTL_EQUITY': {'min': 0.00, 'max': 0.40},
     'FIXED_INCOME': {'min': 0.10, 'max': 0.60},
-    'COMMODITIES': {'min': 0.00, 'max': 0.15},
-    'REAL_ESTATE': {'min': 0.00, 'max': 0.15},
+    'COMMODITIES': {'min': 0.00, 'max': 0.4},
+    'REAL_ESTATE': {'min': 0.00, 'max': 0.4},
 }
 
 # True로 설정하면 포트폴리오의 월간 회전율을 MAX_TURNOVER 이하로 제한
-USE_TURNOVER_CONSTRAINT = True
+USE_TURNOVER_CONSTRAINT = False
 MAX_TURNOVER = 0.40
 
 # 비교 분석을 위한 벤치마크 리스트 설정
