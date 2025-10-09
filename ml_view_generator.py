@@ -4,26 +4,24 @@ from statsmodels.tsa.arima.model import ARIMA
 import pmdarima as pm
 import config
 from logger_setup import logger
+import traceback
 
 def train_volatility_model(ticker, train_df):
+    """단일 티커의 변동성 예측을 위한 ARIMAX 모델 훈련.
+
+    pmdarima.auto_arima로 최적 ARIMA 차수를 자동 탐색하고,
+    외생 변수(exogenous variables)를 포함하여 시계열 패턴과 외부 요인 영향을 모두 고려.
     """
-    단일 티커의 변동성 예측을 위한 ARIMAX 모델 훈련
+    y_train = train_df['realized_vol'].values
+    X_train = train_df.drop(columns=['TICKER', 'target_return', 'realized_vol']).values
 
-    - `pmdarima.auto_arima`로 최적 ARIMA 차수(p,d,q) 자동 탐색
-    - 외생 변수(exogenous variables)를 포함하여 모델 훈련
-    - 시계열 패턴과 외부 요인 영향을 모두 고려
-
-    Args:
-        ticker (str): 모델 훈련 대상 티커명
-        train_df (pd.DataFrame): 해당 티커의 훈련 데이터
-
-    Returns:
-        statsmodels.tsa.arima.model.ARIMAResultsWrapper: 훈련된 ARIMAX 모델 객체
-    """
-    y_train = train_df['realized_vol']
-    X_train = train_df.drop(columns=['TICKER', 'target_return', 'realized_vol'])
+    # 입력 데이터가 1차원 배열인 경우 2차원으로 변환
+    if X_train.ndim == 1:
+        X_train = X_train.reshape(-1, 1)
     
-    # auto_arima로 최적 (p,d,q) 탐색
+    logger.error(f"DEBUG: Training model with y_train shape={y_train.shape}, X_train shape={X_train.shape}")
+
+    # auto_arima로 최적 모델 탐색 및 학습
     model = pm.auto_arima(y_train, 
                           exogenous=X_train,
                           start_p=0, start_q=0,
@@ -32,31 +30,14 @@ def train_volatility_model(ticker, train_df):
                           stepwise=True, trace=False, 
                           error_action='ignore', suppress_warnings=True)
     
-    # 최적 차수로 statsmodels ARIMA 모델 정의 및 훈련
-    sm_model = ARIMA(y_train, exog=X_train, order=model.order)
-    fitted_model = sm_model.fit()
-    
-    return fitted_model
+    return model
 
 def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, benchmark_ticker, view_outperformance):
-    """
-    ARIMAX 변동성 예측 기반의 Black-Litterman 뷰 생성
+    """ARIMAX 변동성 예측 기반의 Black-Litterman 뷰(view) 생성.
 
-    - 핵심 가정: '저변동성 이상 현상(Low-volatility anomaly)'
-    - 변동성이 낮을 것으로 예측되는 자산이 벤치마크 대비 초과 성과를 낼 것이라는 뷰 생성
-    - `config.USE_DYNAMIC_OMEGA`가 True일 경우, 모델 잔차 분산으로 뷰의 불확실성(Omega) 동적 조정
-
-    Args:
-        analysis_date (pd.Timestamp): 뷰 생성 기준 날짜
-        tickers (list): 현재 투자 유니버스 티커 리스트
-        full_feature_df (pd.DataFrame): 모든 티커의 피처 데이터
-        Sigma (np.array): 현재 유니버스의 연율화된 공분산 행렬
-        tau (float): Black-Litterman 모델의 불확실성 파라미터
-        benchmark_ticker (str): 성과 비교 기준 티커
-        view_outperformance (float): 뷰의 월간 기대 초과 수익률
-
-    Returns:
-        tuple: Black-Litterman 모델의 P, Q, Omega 행렬
+    '저변동성 이상 현상(Low-volatility anomaly)'에 근거하여, 변동성이 낮을 것으로
+    예측되는 자산이 벤치마크 대비 초과 성과를 낼 것이라는 뷰를 구성.
+    config.USE_DYNAMIC_OMEGA 설정 시, 모델 잔차 분산을 이용해 뷰의 불확실성(Omega)을 동적으로 조정.
     """
     logger.info("ML 뷰 생성 시작")
     
@@ -74,19 +55,44 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
         ticker_train_df = train_df[train_df['TICKER'] == ticker].set_index('date')
         ticker_features = features_for_prediction[features_for_prediction['TICKER'] == ticker]
         
+        # 모델 학습에 필요한 최소 데이터 길이 확인
+        MIN_TRAIN_SAMPLES = 15
+        if len(ticker_train_df) < MIN_TRAIN_SAMPLES:
+            logger.warning(f"Skipping {ticker} due to insufficient training data: {len(ticker_train_df)} samples < {MIN_TRAIN_SAMPLES}")
+            continue
+
         if ticker_train_df.empty or ticker_features.empty:
             continue
 
-        model = train_volatility_model(ticker, ticker_train_df)
-        
-        X_pred = ticker_features.drop(columns=['TICKER', 'target_return', 'realized_vol', 'date'])
-        train_cols = train_df.drop(columns=['TICKER', 'target_return', 'realized_vol', 'date']).columns
-        X_pred = X_pred[train_cols]
+        try:
+            model = train_volatility_model(ticker, ticker_train_df)
+            
+            # 학습에 사용된 컬럼 순서를 보장
+            train_cols = ticker_train_df.drop(columns=['TICKER', 'target_return', 'realized_vol']).columns
+            X_pred_df = ticker_features[train_cols]
 
-        pred_vol = model.forecast(steps=1, exog=X_pred).iloc[0]
-        predictions[ticker] = pred_vol
-        
-        residual_variances[ticker] = model.resid.var()
+            # 예측용 데이터를 numpy 배열로 변환
+            X_pred = np.array(X_pred_df)
+            if X_pred.ndim == 1:
+                X_pred = X_pred.reshape(-1, 1)
+
+            # pmdarima 모델의 predict API 사용 및 반환 타입에 따른 처리
+            prediction_result = model.predict(n_periods=1, X=X_pred)
+            if isinstance(prediction_result, pd.Series):
+                pred_vol = prediction_result.iloc[0]
+            else:
+                pred_vol = prediction_result[0]
+            
+            predictions[ticker] = pred_vol
+            
+            # pmdarima 모델의 resid() 메소드 사용
+            residual_variances[ticker] = np.var(model.resid())
+        except Exception as e:
+            logger.error(f"--- ERROR processing ticker: {ticker} ---")
+            logger.error(f"Exception Type: {type(e)}")
+            logger.error(f"Exception Message: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            continue
 
     if benchmark_ticker not in predictions:
         logger.warning(f"벤치마크 티커 {benchmark_ticker} 예측 없음, 뷰 생성 불가")
@@ -164,4 +170,5 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
 
     Omega = np.diag(omega_diag_vector)
 
+    logger.error(f"DEBUG: Returning P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
     return P, Q, Omega
