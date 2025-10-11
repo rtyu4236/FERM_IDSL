@@ -3,9 +3,9 @@ import quantstats as qs
 import statsmodels.api as sm
 import numpy as np
 import os
-import config
-import data_manager
-from logger_setup import logger
+from config import settings as config
+from src.data_processing import manager as data_manager
+from src.utils.logger import logger
 import matplotlib.pyplot as plt
 import traceback
 

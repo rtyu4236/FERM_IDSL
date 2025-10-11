@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
 import os
-import data_manager
-import ml_view_generator
-from black_litterman import BlackLittermanPortfolio
+from src.data_processing import manager as data_manager
+from src.models import view_generator as ml_view_generator
+from src.models.black_litterman import BlackLittermanPortfolio
 import quantstats as qs
-import config
-from logger_setup import logger
+from config import settings as config
+from src.utils.logger import logger
 
 def _filter_config_by_tickers(all_available_tickers, etf_costs, asset_groups, group_constraints, benchmark_tickers):
     """

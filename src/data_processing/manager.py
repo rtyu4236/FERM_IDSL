@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 import os
-import config
+from config import settings as config
 from statsmodels.tsa.stattools import adfuller
-from logger_setup import logger
+from src.utils.logger import logger
 
 def load_raw_data():
     """

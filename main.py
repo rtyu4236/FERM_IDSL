@@ -1,7 +1,7 @@
-import backtester
+from src.backtesting import backtester
 import warnings
-import config
-import logger_setup 
+from config import settings as config
+from src.utils import logger as logger_setup 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 if __name__ == '__main__':
@@ -31,7 +31,7 @@ if __name__ == '__main__':
         import pandas as pd
         cumulative_returns_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
         cumulative_df = pd.read_csv(cumulative_returns_path, index_col=0, parse_dates=True)
-        from visualizer import run_visualization
+        from src.visualization.plot import run_visualization
         run_visualization(cumulative_df, ff_df)
     except FileNotFoundError:
         logger_setup.logger.error(f"시각화를 위한 'cumulative_returns.csv' 파일을 찾을 수 없습니다.")

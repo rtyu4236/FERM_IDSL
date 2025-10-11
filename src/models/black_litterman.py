@@ -3,8 +3,8 @@ import numpy as np
 from sklearn.covariance import LedoitWolf
 from cvxopt import matrix, solvers
 import warnings
-import config
-from logger_setup import logger
+from config import settings as config
+from src.utils.logger import logger
 solvers.options['show_progress'] = False
 warnings.filterwarnings('ignore', category=UserWarning)
 
