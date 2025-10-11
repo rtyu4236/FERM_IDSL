@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-import config
+from config import settings as config
 
 def setup_logger():
     """프로젝트 전반에 사용될 로거 설정.
