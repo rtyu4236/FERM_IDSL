@@ -1,0 +1,151 @@
+import torch
+import torch.nn as nn
+from pytorch_tcn import TCN
+from sklearn.svm import SVR
+from src.utils.logger import logger
+
+
+class LastTimeStep(nn.Module):
+    """A custom PyTorch module to extract the last time step from a sequence output."""
+    def forward(self, x):
+        logger.debug(f"[LastTimeStep.forward] Function entry. Input x shape={x.shape}, dtype={x.dtype}")
+        output = x[:, :, -1]
+        logger.debug(f"[LastTimeStep.forward] Output shape={output.shape}, dtype={output.dtype}")
+        return output
+
+class TCN_SVR_Model:
+    """
+    A hybrid model combining a Temporal Convolutional Network (TCN) for feature extraction
+    from time-series data and a Support Vector Regression (SVR) for final prediction.
+
+    The TCN part is a PyTorch model that learns to predict future technical indicators.
+    The SVR part is a scikit-learn model that takes the TCN's predicted indicators as input
+    to predict the final return.
+    """
+    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale'):
+        """
+        Initializes the TCN and SVR models.
+
+        Args:
+            input_size (int): The number of input features for the TCN.
+            output_size (int): The number of output indicators for the TCN to predict.
+            num_channels (list): A list of integers defining the number of channels in each TCN layer.
+            kernel_size (int): The size of the convolutional kernel.
+            dropout (float): The dropout rate for regularization.
+            lookback_window (int): The number of past time steps to use for prediction.
+            svr_C (float): The C parameter for the SVR model.
+            svr_gamma (str or float): The gamma parameter for the SVR model.
+        """
+        logger.info("[TCN_SVR_Model.__init__] Function entry.")
+        logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}")
+        self.tcn_model = TCN(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
+        logger.info(f"[TCN_SVR_Model.__init__] TCN model initialized. Type: {type(self.tcn_model)}")
+        self.net = nn.Sequential(
+            self.tcn_model,
+            LastTimeStep(), # Use the custom module
+            nn.Linear(num_channels[-1], output_size)
+        )
+        logger.info(f"[TCN_SVR_Model.__init__] Sequential network initialized. Type: {type(self.net)}")
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001)
+        self.criterion = nn.MSELoss()
+        self.lookback_window = lookback_window
+
+        self.svr_model = SVR(kernel='rbf', C=svr_C, gamma=svr_gamma)
+        logger.info(f"[TCN_SVR_Model.__init__] SVR model initialized with C={svr_C} and gamma={svr_gamma}. Type: {type(self.svr_model)}")
+        logger.info("[TCN_SVR_Model.__init__] Function exit.")
+
+    def fit(self, X_train_tensor, y_train_indicators_tensor, y_train_returns_numpy, epochs=50, patience=10, min_delta=0.0001):
+        logger.info("[TCN_SVR_Model.fit] Function entry.")
+        logger.info(f"[TCN_SVR_Model.fit] Input: X_train_tensor shape={X_train_tensor.shape}, dtype={X_train_tensor.dtype}")
+        logger.info(f"[TCN_SVR_Model.fit] Input: y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, dtype={y_train_indicators_tensor.dtype}")
+        logger.info(f"[TCN_SVR_Model.fit] Input: y_train_returns_numpy shape={y_train_returns_numpy.shape}, dtype={y_train_returns_numpy.dtype}")
+        logger.info(f"[TCN_SVR_Model.fit] Training TCN for {epochs} epochs with patience={patience}, min_delta={min_delta}")
+
+        # Split data into training and validation sets for early stopping
+        # Assuming X_train_tensor is (N, L, C) and y_train_indicators_tensor is (N, Output_size)
+        # We need to split N samples.
+        from sklearn.model_selection import train_test_split
+        X_train_tcn, X_val_tcn, y_train_tcn, y_val_tcn = train_test_split(
+            X_train_tensor, y_train_indicators_tensor, test_size=0.2, random_state=42
+        )
+        logger.info(f"[TCN_SVR_Model.fit] TCN train split: X_train_tcn shape={X_train_tcn.shape}, y_train_tcn shape={y_train_tcn.shape}")
+        logger.info(f"[TCN_SVR_Model.fit] TCN val split: X_val_tcn shape={X_val_tcn.shape}, y_val_tcn shape={y_val_tcn.shape}")
+
+        best_loss = float('inf')
+        patience_counter = 0
+        best_model_state = None
+
+        # 1. Train the TCN model
+        for epoch in range(epochs):
+            self.net.train()
+            self.optimizer.zero_grad()
+            output = self.net(X_train_tcn.permute(0, 2, 1))
+            loss = self.criterion(output, y_train_tcn)
+            loss.backward()
+            self.optimizer.step()
+
+            # Evaluate on validation set
+            self.net.eval()
+            with torch.no_grad():
+                val_output = self.net(X_val_tcn.permute(0, 2, 1))
+                val_loss = self.criterion(val_output, y_val_tcn)
+            
+            if (epoch + 1) % 10 == 0:
+                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+
+            # Early stopping logic
+            if val_loss.item() < best_loss - min_delta:
+                best_loss = val_loss.item()
+                patience_counter = 0
+                best_model_state = self.net.state_dict() # Save best model state
+                logger.info(f"[TCN_SVR_Model.fit] New best validation loss: {best_loss:.4f}")
+            else:
+                patience_counter += 1
+                logger.info(f"[TCN_SVR_Model.fit] Validation loss not improved. Patience counter: {patience_counter}")
+
+            if patience_counter >= patience:
+                logger.info(f"[TCN_SVR_Model.fit] Early stopping triggered after {epoch+1} epochs.")
+                break
+        
+        # Restore best model weights
+        if best_model_state:
+            self.net.load_state_dict(best_model_state)
+            logger.info("[TCN_SVR_Model.fit] Restored best model weights.")
+        self.best_loss = best_loss # Store best loss as an attribute
+
+        logger.info("[TCN_SVR_Model.fit] TCN training complete. Predicting indicators on training data.")
+        self.net.eval()
+        with torch.no_grad():
+            predicted_indicators_train_tensor = self.net(X_train_tensor.permute(0, 2, 1))
+        
+        predicted_indicators_train_numpy = predicted_indicators_train_tensor.cpu().numpy()
+        logger.info(f"[TCN_SVR_Model.fit] Predicted indicators (train) shape={predicted_indicators_train_numpy.shape}, dtype={predicted_indicators_train_numpy.dtype}")
+
+        logger.info("[TCN_SVR_Model.fit] Training SVR model.")
+        self.svr_model.fit(predicted_indicators_train_numpy, y_train_returns_numpy)
+        logger.info("[TCN_SVR_Model.fit] SVR training complete. Function exit.")
+
+    def predict(self, X_test_tensor):
+        """
+        Makes a prediction using the trained TCN and SVR models.
+
+        Args:
+            X_test_tensor (torch.Tensor): Test data for prediction.
+
+        Returns:
+            float: The predicted return.
+        """
+        logger.info("[TCN_SVR_Model.predict] Function entry.")
+        logger.info(f"[TCN_SVR_Model.predict] Input: X_test_tensor shape={X_test_tensor.shape}, dtype={X_test_tensor.dtype}")
+        
+        self.net.eval()
+        with torch.no_grad():
+            predicted_indicators_test_tensor = self.net(X_test_tensor.permute(0, 2, 1))
+        
+        predicted_indicators_test_numpy = predicted_indicators_test_tensor.cpu().numpy()
+        logger.info(f"[TCN_SVR_Model.predict] Predicted indicators (test) shape={predicted_indicators_test_numpy.shape}, dtype={predicted_indicators_test_numpy.dtype}")
+
+        predicted_return = self.svr_model.predict(predicted_indicators_test_numpy)
+        logger.info(f"[TCN_SVR_Model.predict] Predicted return shape={predicted_return.shape}, dtype={predicted_return.dtype}")
+        logger.info("[TCN_SVR_Model.predict] Function exit.")
+        return predicted_return

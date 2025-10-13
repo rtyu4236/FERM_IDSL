@@ -5,23 +5,20 @@ import pmdarima as pm
 from config import settings as config
 from src.utils.logger import logger
 import traceback
+import torch
+from src.models.tcn_svr import TCN_SVR_Model
 
-def train_volatility_model(ticker, train_df):
-    """단일 티커의 변동성 예측을 위한 ARIMAX 모델 훈련.
-
-    pmdarima.auto_arima로 최적 ARIMA 차수를 자동 탐색하고,
-    외생 변수(exogenous variables)를 포함하여 시계열 패턴과 외부 요인 영향을 모두 고려.
-    """
+def train_volatility_model(ticker, train_df, feature_cols):
+    logger.info(f"[train_volatility_model] Function entry. Ticker: {ticker}")
+    logger.info(f"[train_volatility_model] Input: train_df shape={train_df.shape}, feature_cols len={len(feature_cols)}")
     y_train = train_df['realized_vol'].values
-    X_train = train_df.drop(columns=['TICKER', 'target_return', 'realized_vol']).values
+    X_train = train_df[feature_cols].values
 
-    # 입력 데이터가 1차원 배열인 경우 2차원으로 변환
     if X_train.ndim == 1:
         X_train = X_train.reshape(-1, 1)
     
-    logger.error(f"DEBUG: Training model with y_train shape={y_train.shape}, X_train shape={X_train.shape}")
+    logger.info(f"[train_volatility_model] y_train shape={y_train.shape}, X_train shape={X_train.shape}")
 
-    # auto_arima로 최적 모델 탐색 및 학습
     model = pm.auto_arima(y_train, 
                           exogenous=X_train,
                           start_p=0, start_q=0,
@@ -29,92 +26,96 @@ def train_volatility_model(ticker, train_df):
                           seasonal=False, 
                           stepwise=True, trace=False, 
                           error_action='ignore', suppress_warnings=True)
-    
+    logger.info(f"[train_volatility_model] Model trained. Type: {type(model)}")
+    logger.info("[train_volatility_model] Function exit.")
     return model
 
 def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, benchmark_ticker, view_outperformance):
-    """ARIMAX 변동성 예측 기반의 Black-Litterman 뷰(view) 생성.
-
-    '저변동성 이상 현상(Low-volatility anomaly)'에 근거하여, 변동성이 낮을 것으로
-    예측되는 자산이 벤치마크 대비 초과 성과를 낼 것이라는 뷰를 구성.
-    config.USE_DYNAMIC_OMEGA 설정 시, 모델 잔차 분산을 이용해 뷰의 불확실성(Omega)을 동적으로 조정.
-    """
-    logger.info("ML 뷰 생성 시작")
+    logger.info("[generate_ml_views] Function entry.")
+    logger.info(f"[generate_ml_views] Input: analysis_date={analysis_date}, tickers len={len(tickers)}, full_feature_df shape={full_feature_df.shape}, Sigma shape={Sigma.shape}, tau={tau}, benchmark_ticker={benchmark_ticker}, view_outperformance={view_outperformance}")
     
     train_df = full_feature_df[full_feature_df['date'] < analysis_date]
     features_for_prediction = full_feature_df[full_feature_df['date'] == analysis_date]
+    logger.info(f"[generate_ml_views] train_df shape: {train_df.shape}, features_for_prediction shape: {features_for_prediction.shape}")
 
     if features_for_prediction.empty:
         logger.warning("예측 날짜 피처 없음, 뷰 생성 불가")
+        logger.info("[generate_ml_views] Function exit (no features for prediction).")
         return np.array([]), np.array([]), np.array([])
 
     predictions = {}
     residual_variances = {}
     
     for ticker in tickers:
-        ticker_train_df = train_df[train_df['TICKER'] == ticker].set_index('date')
-        ticker_features = features_for_prediction[features_for_prediction['TICKER'] == ticker]
+        logger.info(f"[generate_ml_views] Processing ticker: {ticker}")
+        ticker_train_df = train_df[train_df['ticker'] == ticker].set_index('date')
+        ticker_features = features_for_prediction[features_for_prediction['ticker'] == ticker]
+        logger.info(f"[generate_ml_views] Ticker {ticker}: ticker_train_df shape={ticker_train_df.shape}, ticker_features shape={ticker_features.shape}")
         
-        # 모델 학습에 필요한 최소 데이터 길이 확인
         MIN_TRAIN_SAMPLES = 15
         if len(ticker_train_df) < MIN_TRAIN_SAMPLES:
             logger.warning(f"Skipping {ticker} due to insufficient training data: {len(ticker_train_df)} samples < {MIN_TRAIN_SAMPLES}")
             continue
 
         if ticker_train_df.empty or ticker_features.empty:
+            logger.warning(f"[generate_ml_views] Ticker {ticker}: Empty train_df or features_for_prediction, skipping.")
             continue
 
         try:
-            model = train_volatility_model(ticker, ticker_train_df)
-            
-            # 학습에 사용된 컬럼 순서를 보장
-            train_cols = ticker_train_df.drop(columns=['TICKER', 'target_return', 'realized_vol']).columns
-            X_pred_df = ticker_features[train_cols]
+            original_features = [
+                'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
+                'Mkt-RF', 'SMB', 'HML', 'RF'
+            ]
+            lag_features = [col for col in ticker_train_df.columns if '_lag_' in col]
+            arima_features = original_features + lag_features
+            arima_features = [f for f in arima_features if f in ticker_train_df.columns]
+            logger.info(f"[generate_ml_views] Ticker {ticker}: ARIMAX features len={len(arima_features)}: {arima_features}")
 
-            # 예측용 데이터를 numpy 배열로 변환
+            model = train_volatility_model(ticker, ticker_train_df, arima_features)
+            
+            X_pred_df = ticker_features[arima_features]
+            logger.info(f"[generate_ml_views] Ticker {ticker}: X_pred_df shape={X_pred_df.shape}")
+
             X_pred = np.array(X_pred_df)
             if X_pred.ndim == 1:
                 X_pred = X_pred.reshape(-1, 1)
+            logger.info(f"[generate_ml_views] Ticker {ticker}: X_pred shape={X_pred.shape}")
 
-            # pmdarima 모델의 predict API 사용 및 반환 타입에 따른 처리
             prediction_result = model.predict(n_periods=1, X=X_pred)
             if isinstance(prediction_result, pd.Series):
                 pred_vol = prediction_result.iloc[0]
             else:
                 pred_vol = prediction_result[0]
+            logger.info(f"[generate_ml_views] Ticker {ticker}: Predicted volatility={pred_vol:.4f}")
             
             predictions[ticker] = pred_vol
             
-            # pmdarima 모델의 resid() 메소드 사용
             residual_variances[ticker] = np.var(model.resid())
         except Exception as e:
-            logger.error(f"--- ERROR processing ticker: {ticker} ---")
-            logger.error(f"Exception Type: {type(e)}")
-            logger.error(f"Exception Message: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"[generate_ml_views] Ticker {ticker}: ERROR processing ticker: {e}")
+            logger.error(f"[generate_ml_views] Ticker {ticker}: Traceback: {traceback.format_exc()}")
             continue
 
     if benchmark_ticker not in predictions:
         logger.warning(f"벤치마크 티커 {benchmark_ticker} 예측 없음, 뷰 생성 불가")
+        logger.info("[generate_ml_views] Function exit (no benchmark prediction).")
         return np.array([]), np.array([]), np.array([])
 
-    # 변동성 예측치를 기준으로 자산을 정렬
     sorted_predictions = sorted(predictions.items(), key=lambda item: item[1])
-    
-    # 뷰 후보군에서 벤치마크 자산은 제외
     non_benchmark_predictions = [p for p in sorted_predictions if p[0] != benchmark_ticker]
+    logger.info(f"[generate_ml_views] Sorted predictions len={len(sorted_predictions)}, non_benchmark_predictions len={len(non_benchmark_predictions)}")
 
     if not non_benchmark_predictions:
         logger.info("벤치마크 외 자산 예측 없음, 뷰 생성 불가")
+        logger.info("[generate_ml_views] Function exit (no non-benchmark predictions).")
         return np.array([]), np.array([]), np.array([])
 
-    # 가장 변동성이 낮은 자산과 높은 자산을 선택
     best_performer_ticker, best_performer_vol = non_benchmark_predictions[0]
     worst_performer_ticker, worst_performer_vol = non_benchmark_predictions[-1]
     benchmark_vol = predictions[benchmark_ticker]
+    logger.info(f"[generate_ml_views] Best performer: {best_performer_ticker} ({best_performer_vol:.4f}), Worst performer: {worst_performer_ticker} ({worst_performer_vol:.4f}), Benchmark vol: {benchmark_vol:.4f}")
 
     view_definitions = []
-    # 뷰 1: Best Performer vs. Benchmark
     if best_performer_vol < benchmark_vol:
         view_definitions.append({
             'winner': best_performer_ticker,
@@ -122,16 +123,17 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
             'confidence': view_outperformance
         })
 
-    # 뷰 2: Benchmark vs. Worst Performer
     if worst_performer_vol > benchmark_vol:
         view_definitions.append({
             'winner': benchmark_ticker,
             'loser': worst_performer_ticker,
             'confidence': view_outperformance
         })
+    logger.info(f"[generate_ml_views] View definitions len={len(view_definitions)}")
 
     if not view_definitions:
         logger.info("생성된 확신 있는 뷰 없음")
+        logger.info("[generate_ml_views] Function exit (no view definitions).")
         return np.array([]), np.array([]), np.array([])
 
     num_views = len(view_definitions)
@@ -139,9 +141,8 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
     
     P = np.zeros((num_views, num_assets))
     Q = np.zeros((num_views, 1))
+    logger.info(f"[generate_ml_views] Initial P shape={P.shape}, Q shape={Q.shape}")
     
-    # He-Litterman 공식 기반 기본 Omega 계산
-    # P 행렬이 먼저 채워져야 정확한 계산 가능, 임시 계산 후 아래에서 재계산
     temp_P = P.copy()
     for i, view in enumerate(view_definitions):
         winner_idx = tickers.index(view['winner'])
@@ -149,6 +150,7 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
         temp_P[i, winner_idx] = 1
         temp_P[i, loser_idx] = -1
     omega_diag_vector = np.diag(temp_P @ (tau * Sigma) @ temp_P.T).copy()
+    logger.info(f"[generate_ml_views] omega_diag_vector shape={omega_diag_vector.shape}")
 
     for i, view in enumerate(view_definitions):
         winner_idx = tickers.index(view['winner'])
@@ -156,19 +158,109 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
         P[i, winner_idx] = 1
         P[i, loser_idx] = -1
         Q[i] = view['confidence']
-        logger.info(f"{view['winner']}가 {view['loser']} 능가 예상")
+        logger.info(f"[generate_ml_views] View {i}: {view['winner']}가 {view['loser']} 능가 예상, confidence={view['confidence']}")
 
-        # 동적 오메가 계산
         if config.USE_DYNAMIC_OMEGA:
             winner_resid_var = residual_variances.get(view['winner'], 0)
             loser_resid_var = residual_variances.get(view['loser'], 0)
             avg_resid_var = (winner_resid_var + loser_resid_var) / 2
-            
-            # 기본 불확실성에 모델 예측 오차(잔차 분산)를 더해 오메가 조정
             omega_diag_vector[i] += avg_resid_var
-            logger.info(f"동적 오메가 적용, 기본 불확실성에 {avg_resid_var:.6f} 추가")
+            logger.info(f"[generate_ml_views] 동적 오메가 적용, 기본 불확실성에 {avg_resid_var:.6f} 추가. New omega_diag_vector[{i}]={omega_diag_vector[i]:.6f}")
 
     Omega = np.diag(omega_diag_vector)
 
-    logger.error(f"DEBUG: Returning P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
+    logger.info(f"[generate_ml_views] Final P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
+    logger.info("[generate_ml_views] Function exit.")
+    return P, Q, Omega
+
+def _create_sequences(data, lookback_window):
+    logger.info("[_create_sequences] Function entry.")
+    logger.info(f"[_create_sequences] Input: data shape={data.shape}, lookback_window={lookback_window}")
+    xs, ys = [], []
+    for i in range(len(data) - lookback_window):
+        x = data[i:(i + lookback_window)]
+        y = data[i + lookback_window]
+        xs.append(x)
+        ys.append(y)
+    logger.info(f"[_create_sequences] Generated {len(xs)} sequences. Example x shape: {xs[0].shape if xs else 'N/A'}, Example y shape: {ys[0].shape if ys else 'N/A'}")
+    logger.info("[_create_sequences] Function exit.")
+    return np.array(xs), np.array(ys)
+
+def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params):
+    logger.info("[generate_tcn_svr_views] Function entry.")
+    logger.info(f"[generate_tcn_svr_views] Input: analysis_date={analysis_date}, tickers len={len(tickers)}, full_feature_df shape={full_feature_df.shape}, model_params={model_params}")
+    
+    num_assets = len(tickers)
+    predicted_returns = np.zeros(num_assets)
+    model_errors = np.zeros(num_assets) # Placeholder for future implementation
+
+    indicator_features = ['ATRr_14', 'ADX_14', 'EMA_20', 'MACD_12_26_9', 'SMA_50', 'HURST', 'RSI_14']
+    other_features = ['realized_vol', 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 'Mkt-RF', 'SMB', 'HML', 'RF']
+    lag_features = [col for col in full_feature_df.columns if '_lag_' in col]
+    all_features = indicator_features + other_features + lag_features
+    logger.info(f"[generate_tcn_svr_views] Defined features: indicator_features len={len(indicator_features)}, other_features len={len(other_features)}, lag_features len={len(lag_features)}, all_features len={len(all_features)}")
+
+    for i, ticker in enumerate(tickers):
+        logger.info(f"[generate_tcn_svr_views] Processing ticker: {ticker}")
+        ticker_df = full_feature_df[full_feature_df['ticker'] == ticker].copy()
+        ticker_df = ticker_df.dropna(subset=all_features + ['target_return'])
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: ticker_df shape={ticker_df.shape}, columns={ticker_df.columns.tolist()}")
+        
+        if len(ticker_df) < model_params['lookback_window'] + 1:
+            logger.warning(f"{ticker}에 대한 데이터가 부족하여 뷰 생성을 건너<binary data, 1 bytes>니다. (데이터 수: {len(ticker_df)}, lookback: {model_params['lookback_window']})")
+            predicted_returns[i] = 0
+            continue
+
+        X_data = ticker_df[all_features].values
+        y_indicators = ticker_df[indicator_features].values
+        y_returns = ticker_df['target_return'].values
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
+
+        X_seq, y_seq_combined = _create_sequences(np.hstack([X_data, y_indicators, y_returns.reshape(-1,1)]), model_params['lookback_window'])
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_seq shape={X_seq.shape}, y_seq_combined shape={y_seq_combined.shape}")
+        
+        X_train_seq = X_seq[:, :, :-len(indicator_features)-1]
+        y_train_indicators_seq = y_seq_combined[:, -len(indicator_features)-1:-1]
+        y_train_returns_seq = y_seq_combined[:, -1]
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_train_seq shape={X_train_seq.shape}, y_train_indicators_seq shape={y_train_indicators_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
+
+        X_test_seq = np.array([X_data[-model_params['lookback_window']:]])
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_test_seq shape={X_test_seq.shape}")
+
+        X_train_tensor = torch.from_numpy(X_train_seq).float()
+        y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
+        X_test_tensor = torch.from_numpy(X_test_seq).float()
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_train_tensor shape={X_train_tensor.shape}, y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, X_test_tensor shape={X_test_tensor.shape}")
+
+        model = TCN_SVR_Model(
+            input_size=len(all_features),
+            output_size=len(indicator_features),
+            num_channels=model_params['num_channels'],
+            kernel_size=model_params['kernel_size'],
+            dropout=model_params['dropout'],
+            lookback_window=model_params['lookback_window'],
+            svr_C=model_params.get('svr_C', 1.0),
+            svr_gamma=model_params.get('svr_gamma', 'scale')
+        )
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
+        model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
+                  epochs=model_params.get('epochs', 50),
+                  patience=model_params.get('early_stopping_patience', 10),
+                  min_delta=model_params.get('early_stopping_min_delta', 0.0001))
+        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: TCN_SVR_Model fitted.")
+        
+        prediction = model.predict(X_test_tensor)
+        predicted_returns[i] = prediction[0]
+        logger.info(f"{ticker}의 예측 수익률: {prediction[0]:.4f}")
+
+    P = np.identity(num_assets)
+    Q = predicted_returns.reshape(-1, 1)
+
+    base_uncertainty = model_params.get('base_uncertainty', 0.1)
+    omega_diag = np.full(num_assets, base_uncertainty) + model_errors
+    Omega = np.diag(omega_diag)
+
+    logger.info(f"[generate_tcn_svr_views] Final P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
+    logger.info("TCN-SVR 기반 절대적 뷰 생성 완료")
+    logger.info("[generate_tcn_svr_views] Function exit.")
     return P, Q, Omega
