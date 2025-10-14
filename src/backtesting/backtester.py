@@ -74,7 +74,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_tickers, start_year, e
         # 3.1. 투자 유니버스 선정 (매월)
         if use_etf_ranking and ranker:
             logger.info(f"Ranking ETFs for {analysis_date.strftime('%Y-%m')}...")
-            universe_for_month = ranker.get_top_tickers(str(analysis_date.date()), top_n=top_n)
+            universe_for_month = ranker.get_top_tickers(str(analysis_date.date()), daily_df, all_tickers, top_n=top_n)
         else:
             universe_for_month = all_tickers # Use the pre-filtered liquid universe if ranking is off
         logger.info(f"Universe for {analysis_date.strftime('%Y-%m')}: {len(universe_for_month)} tickers")
