@@ -25,19 +25,19 @@ def calculate_hurst_exponent(time_series, max_lag=100):
 
 def load_raw_data():
     """
-    모든 원시 데이터 파일을 로드하고 초기 정제 작업 수행
-    `config.py`에 정의된 `DATA_DIR`에서 원본 CSV 파일 로드
-    기본 전처리(날짜 변환, 컬럼명 표준화 등) 수행
+    모든 raw 데이터 파일을 로드하고 초기 정제 작업 수행
     """
-    logger.info("원시 데이터 파일 로드 시작")
+    logger.info("raw 데이터 파일 로드 시작")
     
-    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily.csv'), low_memory=False)
+    # 일별 데이터 로드 및 컬럼명 소문자 통일
+    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily_all.csv'), low_memory=False)
     daily_df.columns = [col.lower() for col in daily_df.columns]
-    daily_df['date'] = pd.to_datetime(daily_df['date'], format='%Y%m%d')
+    daily_df['date'] = pd.to_datetime(daily_df['date'])
     
-    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly.csv'))
+    # 월별 데이터 로드 및 컬럼명 소문자 통일
+    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly_all.csv'))
     monthly_df.columns = [col.lower() for col in monthly_df.columns]
-    monthly_df['date'] = pd.to_datetime(monthly_df['date'], format='%Y%m%d')
+    monthly_df['date'] = pd.to_datetime(monthly_df['date'])
     monthly_df = monthly_df[monthly_df['date'] >= '1990-01-01'].copy()
     monthly_df = monthly_df.dropna(subset=['ticker'])
     monthly_df = monthly_df[['date', 'ticker', 'vwretd']].copy()
@@ -57,7 +57,7 @@ def load_raw_data():
     ff_df['date'] = ff_df['date'] + pd.offsets.MonthEnd(0)
     ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']] = ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']].astype(float) / 100
     
-    logger.info("원시 데이터 로딩 완료")
+    logger.info("raw 데이터 로딩 완료")
     return daily_df, monthly_df, vix_df, ff_df, all_tickers
 
 def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
@@ -197,6 +197,36 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
 
     logger.info("피처 데이터셋 생성 완료")
     return final_df
+
+def filter_liquid_universe(daily_df, all_tickers, start_year, min_avg_value=1_000_000):
+    """거래대금 기준으로 투자 유니버스를 필터링합니다."""
+    logger.info("Starting universe pre-filtering based on liquidity...")
+    
+    # 'prc'와 'vol' 컬럼이 없으면 필터링을 건너<binary data, 1 bytes>니다.
+    if 'prc' not in daily_df.columns or 'vol' not in daily_df.columns:
+        logger.warning("'prc' or 'vol' not found in daily_df, skipping liquidity filter.")
+        return all_tickers
+
+    # 거래대금 계산
+    daily_df['value'] = daily_df['prc'] * daily_df['vol']
+    
+    # 백테스트 시작일 기준, 지난 3개월간의 일평균 거래대금 계산
+    filter_end_date = pd.to_datetime(f"{start_year}-01-01")
+    filter_start_date = filter_end_date - pd.DateOffset(months=3)
+    
+    liquidity_df = daily_df[
+        (daily_df['date'] >= filter_start_date) & 
+        (daily_df['date'] < filter_end_date)
+    ]
+    
+    avg_daily_value = liquidity_df.groupby('ticker')['value'].mean()
+    
+    # 거래대금 기준을 만족하는 티커만 선택
+    liquid_tickers = avg_daily_value[avg_daily_value >= min_avg_value].index.tolist()
+    
+    logger.info(f"Pre-filtering complete. {len(all_tickers)} tickers -> {len(liquid_tickers)} liquid tickers.")
+    
+    return liquid_tickers
 
 if __name__ == '__main__':
     daily, monthly, vix, ff, _ = load_raw_data()
