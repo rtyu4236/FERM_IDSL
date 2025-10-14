@@ -93,6 +93,7 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
 
     # 모델 초기화
     expense_ratios_for_bl = {k: v['expense_ratio'] for k, v in filtered_costs.items()}
+
     bl_portfolio_model = BlackLittermanPortfolio(
         all_returns_df=monthly_df,
         ff_df=ff_df,
@@ -114,7 +115,10 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
 
     for analysis_date in backtest_dates[:-1]:
         logger.info(f"\n{analysis_date.strftime('%Y-%m')}월 백테스트 처리 시작")
-        current_tickers, returns_pivot = bl_portfolio_model._get_current_universe(analysis_date)
+        if use_etf_ranking:
+            current_tickers, returns_pivot = bl_portfolio_model._get_etf_universe_with_ranking(analysis_date, top_n)
+        else:
+            current_tickers, returns_pivot = bl_portfolio_model._get_current_universe(analysis_date)
         logger.info(f"투자 유니버스 ({len(current_tickers)}개): {current_tickers}")
         
         if not current_tickers:

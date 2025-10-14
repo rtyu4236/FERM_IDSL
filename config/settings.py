@@ -10,12 +10,12 @@ os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-START_YEAR = 2023
-END_YEAR = 2023
+START_YEAR = 2004
+END_YEAR = 2024
 
 # ETF 랭킹 기능 사용 여부 설정
-USE_ETF_RANKING = False
-TOP_N_ETFS = 100
+USE_ETF_RANKING = True
+TOP_N_ETFS = 50
 
 # 각 ETF의 연간 운용 보수(expense_ratio)와 평균 매수-매도 스프레드(trading_cost_spread)를 정의
 ETF_COSTS = json.load(open(os.path.join(DATA_DIR, 'etf_costs.json')))
