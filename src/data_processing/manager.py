@@ -17,11 +17,11 @@ def load_raw_data():
     """
     logger.info("원시 데이터 파일 로드 시작")
     
-    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily.csv'), low_memory=False)
-    daily_df['date'] = pd.to_datetime(daily_df['date'], format='%Y%m%d')
+    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily_all.csv'), low_memory=False)
+    daily_df['date'] = pd.to_datetime(daily_df['date'], format='%Y-%m-%d')
     
-    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly.csv'))
-    monthly_df['date'] = pd.to_datetime(monthly_df['date'], format='%Y%m%d')
+    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly_all.csv'))
+    monthly_df['date'] = pd.to_datetime(monthly_df['date'], format='%Y-%m-%d')
     monthly_df = monthly_df[monthly_df['date'] >= '1990-01-01'].copy()
     monthly_df = monthly_df.dropna(subset=['TICKER'])
     monthly_df = monthly_df[['date', 'TICKER', 'vwretd']].copy()

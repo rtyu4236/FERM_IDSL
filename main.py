@@ -20,7 +20,9 @@ if __name__ == '__main__':
         asset_groups=config.ASSET_GROUPS,
         group_constraints=config.GROUP_CONSTRAINTS,
         model_params=config.MODEL_PARAMS,
-        benchmark_tickers=config.BENCHMARK_TICKERS
+        benchmark_tickers=config.BENCHMARK_TICKERS,
+        use_etf_ranking=config.USE_ETF_RANKING,
+        top_n=config.TOP_N_ETFS
     )
     logger_setup.logger.info("백테스트 실행 완료")
 

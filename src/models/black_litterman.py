@@ -5,6 +5,7 @@ from cvxopt import matrix, solvers
 import warnings
 from config import settings as config
 from src.utils.logger import logger
+from src.models.etf_quant_ranker import ETFQuantRanker, create_etf_universe_from_daily
 solvers.options['show_progress'] = False
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -57,7 +58,7 @@ class BlackLittermanPortfolio:
     전통적 평균-분산 최적화의 한계를 극복하는 것을 목표로 함.
     """
     
-    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_ticker, asset_groups, group_constraints):
+    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_ticker, asset_groups, group_constraints, daily_df=None, etf_tickers=None):
         self.all_returns_df = all_returns_df
         self.ff_df = ff_df
         self.expense_ratios = expense_ratios
@@ -67,6 +68,23 @@ class BlackLittermanPortfolio:
         self.asset_groups = asset_groups
         self.group_constraints = group_constraints
         self.default_delta = _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker)
+        
+        # ETFQuantRanker 초기화
+        self.etf_ranker = self._initialize_etf_ranker(daily_df, etf_tickers)
+
+    def _initialize_etf_ranker(self, daily_df, etf_tickers):
+        if daily_df is not None:
+            try:
+                etf_universe_df = create_etf_universe_from_daily(daily_df, etf_tickers)
+                etf_ranker = ETFQuantRanker(etf_universe_df)
+                logger.info("ETFQuantRanker 초기화 완료 (daily_df에서 생성)")
+                return etf_ranker
+            except Exception as e:
+                logger.warning(f"daily_df에서 ETFQuantRanker 초기화 실패: {e}")
+                return None
+        else:
+            logger.info("ETFQuantRanker 사용 안함 (etf_universe_df와 daily_df 모두 None)")
+            return None
 
     def _get_current_universe(self, analysis_date):
         """분석 날짜 기준, 투자 가능한 자산 유니버스 결정.
@@ -86,6 +104,63 @@ class BlackLittermanPortfolio:
             index='date', columns='TICKER', values='retx'
         ).fillna(0)
         return sorted(valid_tickers), returns_pivot
+
+    def _get_etf_universe_with_ranking(self, analysis_date, top_n=100):
+        """ETFQuantRanker를 사용하여 상위 ETF를 선정하고 해당 데이터를 반환.
+        
+        Args:
+            analysis_date: 분석 날짜
+            top_n: 선정할 상위 ETF 개수
+            
+        Returns:
+            tuple: (선정된 티커 리스트, 해당 티커들의 수익률 데이터)
+        """
+        if self.etf_ranker is None:
+            logger.warning("ETFQuantRanker가 초기화되지 않음. 기존 방법 사용")
+            return self._get_current_universe(analysis_date)
+        
+        try:
+            # ETFQuantRanker를 사용하여 상위 ETF 선정
+            analysis_date_str = analysis_date.strftime('%Y-%m-%d')
+            selected_tickers = self.etf_ranker.get_top_tickers(analysis_date_str, top_n=top_n)
+            
+            if not selected_tickers:
+                logger.warning("ETFQuantRanker 결과가 없음. 기존 방법 사용")
+                return self._get_current_universe(analysis_date)
+
+            logger.info(f"ETFQuantRanker로 {len(selected_tickers)}개 ETF 선정: {selected_tickers[:10]}...")
+            
+            # 선정된 ETF들의 수익률 데이터 추출
+            start_date = analysis_date - pd.DateOffset(months=self.lookback_months)
+            recent_data = self.all_returns_df[
+                (self.all_returns_df['date'] >= start_date) & 
+                (self.all_returns_df['date'] <= analysis_date) &
+                (self.all_returns_df['TICKER'].isin(selected_tickers))
+            ]
+            
+            if len(recent_data) == 0:
+                logger.warning("선정된 ETF의 수익률 데이터가 없음. 기존 방법 사용")
+                return self._get_current_universe(analysis_date)
+            
+            # 데이터 충분성 확인
+            ticker_counts = recent_data.groupby('TICKER')['date'].nunique()
+            valid_tickers = ticker_counts[ticker_counts >= self.lookback_months].index.tolist()
+            
+            if len(valid_tickers) == 0:
+                logger.warning("유효한 데이터가 있는 ETF가 없음. 기존 방법 사용")
+                return self._get_current_universe(analysis_date)
+            
+            current_returns_df = recent_data[recent_data['TICKER'].isin(valid_tickers)]
+            returns_pivot = current_returns_df.pivot_table(
+                index='date', columns='TICKER', values='retx'
+            ).fillna(0)
+            
+            logger.info(f"ETFQuantRanker 기반 유니버스 구성 완료: {len(valid_tickers)}개 ETF")
+            return sorted(valid_tickers), returns_pivot
+            
+        except Exception as e:
+            logger.error(f"ETFQuantRanker 사용 중 오류 발생: {e}. 기존 방법 사용")
+            return self._get_current_universe(analysis_date)
 
     def _calculate_inputs(self, returns_pivot, analysis_date):
         """
@@ -140,13 +215,20 @@ class BlackLittermanPortfolio:
         W_mkt = np.ones(num_assets) / num_assets
         return Sigma, delta, W_mkt
 
-    def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None):
+    def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None, use_etf_ranking=True, top_n=100):
         """Black-Litterman 공식을 기반으로 최종 포트폴리오 가중치 계산.
 
         사후 기대 수익률(mu_bl)과 사후 공분산(Sigma_post)을 도출한 후,
         cvxopt를 사용한 2차 계획법으로 제약조건 하에서 최적 가중치를 결정.
+        
+        Args:
+            use_etf_ranking (bool): ETFQuantRanker를 사용할지 여부
+            top_n (int): ETFQuantRanker로 선정할 상위 ETF 개수
         """
-        current_tickers, returns_pivot = self._get_current_universe(analysis_date)
+        if use_etf_ranking and self.etf_ranker is not None:
+            current_tickers, returns_pivot = self._get_etf_universe_with_ranking(analysis_date, top_n)
+        else:
+            current_tickers, returns_pivot = self._get_current_universe(analysis_date)
         logger.info("포트폴리오 구성 시작")
         logger.info(f"현재투자종목: {len(current_tickers)}개, {', '.join(current_tickers)}")
 

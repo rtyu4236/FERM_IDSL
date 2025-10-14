@@ -35,6 +35,7 @@ def _filter_config_by_tickers(all_available_tickers, etf_costs, asset_groups, gr
     logger.info("설정 필터링 완료")
     return filtered_costs, filtered_asset_groups, group_constraints, filtered_benchmark_tickers
 
+
 def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_tickers):
     """
     투자 가능한 자산들로만 구성된 1/N 포트폴리오 벤치마크 생성
@@ -74,7 +75,7 @@ def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_
         logger.error(f"1/N 포트폴리오 생성 실패: {e}")
         return None
 
-def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraints, model_params, benchmark_tickers):
+def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraints, model_params, benchmark_tickers, use_etf_ranking=False, top_n=100):
     """
     Black-Litterman 전략과 머신러닝 뷰 기반 전체 백테스트 실행
     """
@@ -100,7 +101,8 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
         tau=model_params['tau'],
         market_proxy_ticker=model_params['market_proxy_ticker'],
         asset_groups=filtered_asset_groups,
-        group_constraints=filtered_group_constraints
+        group_constraints=filtered_group_constraints,
+        daily_df=daily_df
     )
 
     # 백테스팅 루프
@@ -131,7 +133,8 @@ def run_backtest(start_year, end_year, etf_costs, asset_groups, group_constraint
                 weights, _ = bl_portfolio_model.get_black_litterman_portfolio(
                     analysis_date=analysis_date, P=P, Q=Q, Omega=Omega, 
                     pre_calculated_inputs=(Sigma, delta, W_mkt), max_weight=model_params['max_weight'],
-                    previous_weights=previous_weights
+                    previous_weights=previous_weights,
+                    use_etf_ranking=use_etf_ranking, top_n=top_n
                 )
         
         # 수익률 계산
