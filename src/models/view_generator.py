@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
-import pmdarima as pm
+# import pmdarima as pm
 from config import settings as config
 from src.utils.logger import logger
 import traceback
