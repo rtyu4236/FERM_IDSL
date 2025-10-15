@@ -5,12 +5,12 @@ from datetime import datetime
 from config import settings as config
 
 def setup_logger():
-    """프로젝트 전반에 사용될 로거 설정.
+    """Sets up a logger for use throughout the project.
 
-    로그는 INFO 레벨 이상으로 설정되며, 콘솔과 로그 파일에 모두 출력.
-    로그 파일은 `output/backtest_log_YYYY-MM-DD_HHMMSS.log` 형식으로 저장.
+    Logs are set to INFO level and above, and are output to both the console and a log file.
+    Log files are saved in the format `output/backtest_log_YYYY-MM-DD_HHMMSS.log`.
     """
-    # 루트 로거의 기존 핸들러 제거 (중복 출력 방지)
+    # Remove existing handlers from the root logger (to prevent duplicate output)
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
@@ -28,9 +28,9 @@ def setup_logger():
     )
 
     logger = logging.getLogger()
-    logger.info("로거 설정 완료")
-    logger.info(f"로그 파일 생성 위치: {log_filepath}")
+    logger.info("Logger setup complete.")
+    logger.info(f"Log file created at: {log_filepath}")
     return logger
 
-# 모듈 로드 시 로거 설정
+# Set up the logger when the module is loaded
 logger = setup_logger()

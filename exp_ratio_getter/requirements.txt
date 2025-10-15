@@ -1,0 +1,5 @@
+requests
+beautifulsoup4
+asyncio
+google-genai
+google-api-core

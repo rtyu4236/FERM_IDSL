@@ -8,15 +8,12 @@ from src.backtesting import backtester
 from config import settings as config
 from src.utils import logger as logger_setup
 from src.data_processing import manager as data_manager
-from src.models.etf_quant_ranker import ETFQuantRanker, create_etf_universe_from_daily
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the backtesting and visualization process.")
-    # 튜닝 비활성화 (--no-tune) 플래그, 기본적으로 튜닝 실행
     parser.add_argument('--no-tune', dest='tune', action='store_false', help="Skip the monthly rolling hyperparameter tuning.")
-    # 랭킹 비활성화 (--no-ranking) 플래그, 기본적으로 랭킹 실행
     parser.add_argument('--no-ranking', dest='ranking', action='store_false', help="Skip the monthly ETF ranking and use all tickers.")
     parser.add_argument('--trials', type=int, default=50, help="Number of trials for hyperparameter tuning.")
     args = parser.parse_args()
@@ -24,29 +21,42 @@ if __name__ == '__main__':
     logger_setup.logger.info("main.py execution started.")
     logger_setup.logger.info(f"Arguments: tune={args.tune}, ranking={args.ranking}, trials={args.trials}")
 
-    # 1. 전체 데이터 로드
+    # 1. Load all data
     daily_df, monthly_df, vix_df, ff_df, all_tickers = data_manager.load_raw_data()
 
-    # 2. 투자 유니버스 사전 필터링 (유동성 기준)
-    if args.ranking:
-        initial_universe = data_manager.filter_liquid_universe(
+    # 2. Pre-filter the investment universe
+    initial_universe = all_tickers
+    if args.ranking: # Only apply filtering if ranking is enabled
+        # 2.1. Filter by liquidity
+        logger_setup.logger.info("Starting universe pre-filtering based on liquidity...")
+        liquid_tickers = data_manager.filter_liquid_universe(
             daily_df=daily_df,
             all_tickers=all_tickers,
             start_year=config.START_YEAR
         )
-    else:
-        initial_universe = all_tickers
+        
+        # 2.2. Filter by minimum trading history (5 years)
+        logger_setup.logger.info("Filtering universe by minimum history (5 years)...")
+        filter_date = pd.to_datetime(f"{config.START_YEAR}-01-01")
+        MIN_MONTHS = 5 * 12
 
-    # 3. 백테스터에 모든 데이터와 설정을 전달하여 실행
-    # 랭킹 및 튜닝 로직은 이제 백테스터 내부에서 처리됨
+        history_counts = monthly_df[
+            (monthly_df['ticker'].isin(liquid_tickers)) &
+            (monthly_df['date'] < filter_date)
+        ].groupby('ticker').size()
+
+        history_filtered_tickers = history_counts[history_counts >= MIN_MONTHS].index.tolist()
+        logger_setup.logger.info(f"History filtering complete. {len(liquid_tickers)} tickers -> {len(history_filtered_tickers)} tickers.")
+        
+        initial_universe = history_filtered_tickers
+
+    # 3. Pass all data and settings to the backtester and run
     ff_df_from_backtest = backtester.run_backtest(
-        # Dataframes
         daily_df=daily_df,
         monthly_df=monthly_df,
         vix_df=vix_df,
         ff_df=ff_df,
-        all_tickers=initial_universe, # 수정: 필터링된 유니버스 전달
-        # Configurations
+        all_tickers=initial_universe, # Pass the final filtered universe
         start_year=config.START_YEAR,
         end_year=config.END_YEAR,
         etf_costs=config.ETF_COSTS,
@@ -61,7 +71,7 @@ if __name__ == '__main__':
     )
     logger_setup.logger.info("backtester.run_backtest completed.")
 
-    # 3. 결과 시각화
+    # 4. Visualize results
     logger_setup.logger.info("\nResult visualization started.")
     try:
         cumulative_returns_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
@@ -74,4 +84,3 @@ if __name__ == '__main__':
         logger_setup.logger.error(f"Visualization error: {e}")
     logger_setup.logger.info("Result visualization completed.")
     logger_setup.logger.info("main.py execution finished.")
-    

@@ -95,17 +95,12 @@ class TCN_SVR_Objective:
         final_val_loss = model.best_loss
         return final_val_loss
 
-def run_tuning(n_trials=50, end_date=None):
+def run_tuning(full_feature_df, n_trials=50, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
-    logger.info("Loading data for tuning...")
-    daily_df, monthly_df, vix_df, ff_df, all_tickers = data_manager.load_raw_data()
-    full_feature_df = data_manager.create_feature_dataset(daily_df, monthly_df, vix_df, ff_df)
-    logger.info("Data for tuning loaded.")
-
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials, n_jobs=-1)
 
     logger.info("Tuning finished.")
     logger.info(f"Best trial for period ending {end_date}:")
@@ -136,4 +131,8 @@ def run_tuning(n_trials=50, end_date=None):
     return tcn_params
 
 if __name__ == '__main__':
-    run_tuning(n_trials=50)
+    logger.info("Loading data for tuning...")
+    daily_df, monthly_df, vix_df, ff_df, all_tickers = data_manager.load_raw_data()
+    full_feature_df = data_manager.create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df)
+    logger.info("Data for tuning loaded.")
+    run_tuning(full_feature_df, n_trials=50)

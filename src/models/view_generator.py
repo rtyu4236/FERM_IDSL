@@ -39,7 +39,7 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
     logger.info(f"[generate_ml_views] train_df shape: {train_df.shape}, features_for_prediction shape: {features_for_prediction.shape}")
 
     if features_for_prediction.empty:
-        logger.warning("예측 날짜 피처 없음, 뷰 생성 불가")
+        logger.warning("No features for prediction date, cannot generate views.")
         logger.info("[generate_ml_views] Function exit (no features for prediction).")
         return np.array([]), np.array([]), np.array([])
 
@@ -97,7 +97,7 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
             continue
 
     if benchmark_ticker not in predictions:
-        logger.warning(f"벤치마크 티커 {benchmark_ticker} 예측 없음, 뷰 생성 불가")
+        logger.warning(f"No prediction for benchmark ticker {benchmark_ticker}, cannot generate views.")
         logger.info("[generate_ml_views] Function exit (no benchmark prediction).")
         return np.array([]), np.array([]), np.array([])
 
@@ -106,7 +106,7 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
     logger.info(f"[generate_ml_views] Sorted predictions len={len(sorted_predictions)}, non_benchmark_predictions len={len(non_benchmark_predictions)}")
 
     if not non_benchmark_predictions:
-        logger.info("벤치마크 외 자산 예측 없음, 뷰 생성 불가")
+        logger.info("No predictions for non-benchmark assets, cannot generate views.")
         logger.info("[generate_ml_views] Function exit (no non-benchmark predictions).")
         return np.array([]), np.array([]), np.array([])
 
@@ -132,7 +132,7 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
     logger.info(f"[generate_ml_views] View definitions len={len(view_definitions)}")
 
     if not view_definitions:
-        logger.info("생성된 확신 있는 뷰 없음")
+        logger.info("No confident views were generated.")
         logger.info("[generate_ml_views] Function exit (no view definitions).")
         return np.array([]), np.array([]), np.array([])
 
@@ -158,14 +158,14 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
         P[i, winner_idx] = 1
         P[i, loser_idx] = -1
         Q[i] = view['confidence']
-        logger.info(f"[generate_ml_views] View {i}: {view['winner']}가 {view['loser']} 능가 예상, confidence={view['confidence']}")
+        logger.info(f"View {i}: Expect {view['winner']} to outperform {view['loser']}, confidence={view['confidence']}")
 
         if config.USE_DYNAMIC_OMEGA:
             winner_resid_var = residual_variances.get(view['winner'], 0)
             loser_resid_var = residual_variances.get(view['loser'], 0)
             avg_resid_var = (winner_resid_var + loser_resid_var) / 2
             omega_diag_vector[i] += avg_resid_var
-            logger.info(f"[generate_ml_views] 동적 오메가 적용, 기본 불확실성에 {avg_resid_var:.6f} 추가. New omega_diag_vector[{i}]={omega_diag_vector[i]:.6f}")
+            logger.info(f"Applying dynamic omega, adding {avg_resid_var:.6f} to base uncertainty. New omega_diag_vector[{i}]={omega_diag_vector[i]:.6f}")
 
     Omega = np.diag(omega_diag_vector)
 
@@ -207,7 +207,7 @@ def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params
         logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: ticker_df shape={ticker_df.shape}, columns={ticker_df.columns.tolist()}")
         
         if len(ticker_df) < model_params['lookback_window'] + 1:
-            logger.warning(f"{ticker}에 대한 데이터가 부족하여 뷰 생성을 건너<binary data, 1 bytes>니다. (데이터 수: {len(ticker_df)}, lookback: {model_params['lookback_window']})")
+            logger.warning(f"Skipping view generation for {ticker} due to insufficient data. (Data count: {len(ticker_df)}, lookback: {model_params['lookback_window']})")
             predicted_returns[i] = 0
             continue
 
@@ -251,7 +251,7 @@ def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params
         
         prediction = model.predict(X_test_tensor)
         predicted_returns[i] = prediction[0]
-        logger.info(f"{ticker}의 예측 수익률: {prediction[0]:.4f}")
+        logger.info(f"Predicted return for {ticker}: {prediction[0]:.4f}")
 
     P = np.identity(num_assets)
     Q = predicted_returns.reshape(-1, 1)
@@ -261,6 +261,6 @@ def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params
     Omega = np.diag(omega_diag)
 
     logger.info(f"[generate_tcn_svr_views] Final P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
-    logger.info("TCN-SVR 기반 절대적 뷰 생성 완료")
+    logger.info("Absolute view generation based on TCN-SVR complete.")
     logger.info("[generate_tcn_svr_views] Function exit.")
     return P, Q, Omega
