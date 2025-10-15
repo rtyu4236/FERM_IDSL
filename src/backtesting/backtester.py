@@ -29,19 +29,7 @@ def _filter_config_by_tickers(all_available_tickers, etf_costs, asset_groups, gr
     filtered_benchmark_tickers = [t for t in benchmark_tickers if t is None or t in available_set]
     return filtered_costs, filtered_asset_groups, group_constraints, filtered_benchmark_tickers
 
-def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_tickers):
-    try:
-        investable_data = monthly_df[monthly_df['ticker'].isin(investable_tickers)]
-        if investable_data.empty:
-            return None
-        returns_pivot = investable_data.pivot_table(index='date', columns='ticker', values='retx')
-        available_dates = returns_pivot.index.intersection(target_dates)
-        returns_pivot = returns_pivot.loc[available_dates]
-        one_over_n_returns = [(returns_pivot.loc[date].dropna() * (1.0 / len(returns_pivot.loc[date].dropna()))).sum() if date in returns_pivot.index and not returns_pivot.loc[date].dropna().empty else 0.0 for date in target_dates]
-        return pd.Series(one_over_n_returns, index=target_dates, name='1/N Portfolio')
-    except Exception as e:
-        logger.error(f"[create_one_over_n_benchmark_investable] 1/N 포트폴리오 생성 실패: {e}")
-        return None
+
 
 def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_tickers, start_year, end_year, etf_costs, asset_groups, group_constraints, model_params, benchmark_tickers, use_etf_ranking, top_n, run_rolling_tune, tune_trials):
     logger.info("[run_backtest] Function entry.")
@@ -65,6 +53,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_tickers, start_year, e
     logger.info(f"[run_backtest] Backtest dates range: {backtest_dates.min()} to {backtest_dates.max()}, total {len(backtest_dates)} dates.")
     
     bl_returns = []
+    one_over_n_returns_list = []
     previous_weights = pd.Series(dtype=float)
 
     # 3. 매월 리밸런싱 루프
@@ -137,6 +126,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_tickers, start_year, e
         # 3.5. 수익률 계산
         next_month_date = analysis_date + pd.offsets.MonthEnd(1)
         next_month_returns = monthly_df[monthly_df['date'] == next_month_date]
+        
         net_bl_return = 0.0
         if not next_month_returns.empty and weights is not None and not weights.empty:
             merged_bl = pd.merge(weights.to_frame('weight'), next_month_returns, left_index=True, right_on='ticker')
@@ -149,6 +139,15 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_tickers, start_year, e
         bl_returns.append(pd.Series([net_bl_return], index=[next_month_date]))
         previous_weights = weights
 
+        # 1/N 벤치마크 수익률 계산
+        net_one_over_n_return = 0.0
+        if not next_month_returns.empty:
+            valid_returns = next_month_returns['retx'].dropna()
+            if not valid_returns.empty:
+                net_one_over_n_return = valid_returns.mean()
+        
+        one_over_n_returns_list.append(pd.Series([net_one_over_n_return], index=[next_month_date]))
+
     # 4. 최종 결과 집계 및 저장
     logger.info("\n백테스트 분석 및 리포트 생성")
     bl_returns_series = pd.concat(bl_returns).sort_index().squeeze().rename("BL_ML_Strategy")
@@ -159,12 +158,11 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_tickers, start_year, e
     for ticker in valid_benchmark_tickers:
         ticker_returns = monthly_df[monthly_df['ticker'] == ticker].set_index('date')['retx']
         benchmark_returns_dict[ticker] = ticker_returns.rename(ticker)
-    
-    if None in filtered_benchmarks:
-        one_over_n_returns = create_one_over_n_benchmark_investable(monthly_df, bl_returns_series.index, all_tickers)
-        if one_over_n_returns is not None:
-            benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
-    
+
+    if one_over_n_returns_list:
+        one_over_n_returns = pd.concat(one_over_n_returns_list).sort_index().squeeze().rename("1/N Portfolio")
+        benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
+
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})
     cumulative_results_df = (1 + results_df).cumprod()
     cum_results_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
