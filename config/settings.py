@@ -11,15 +11,15 @@ os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# --- 주요 설정 ---
-START_YEAR = 2005
+# --- Main Settings ---
+START_YEAR = 2023
 END_YEAR = 2023
 
-# ETF 랭킹 기능 사용 여부 설정
+# ETF Ranking Feature Settings
 USE_ETF_RANKING = True
 TOP_N_ETFS = 50
 
-# --- 데이터 파일 경로 ---
+# --- Data File Paths ---
 try:
     with open(os.path.join(DATA_DIR, 'etf_costs.json'), 'r') as f:
         ETF_COSTS = json.load(f)
@@ -27,13 +27,13 @@ except FileNotFoundError:
     print(f"Warning: etf_costs.json not found in {DATA_DIR}. Using empty costs.")
     ETF_COSTS = {}
 
-# 모델 파라미터 설정
+# Model Parameter Settings
 MODEL_PARAMS = {
-    # 공통 파라미터
+    # Common Parameters
     'max_weight': 0.7,
     'market_proxy_ticker': 'SPY',
 
-    # ARIMAX 모델 파라미터
+    # ARIMAX Model Parameters
     'use_arima': False,
     'arima_params': {
         'lookback_months': 48,
@@ -41,7 +41,7 @@ MODEL_PARAMS = {
         'view_outperformance': 0.02 / 12,
     },
 
-    # TCN-SVR 모델 파라미터
+    # TCN-SVR Model Parameters
     'use_tcn_svr': True,
     'tcn_svr_params': {
         'tau': 0.025,
@@ -56,17 +56,17 @@ MODEL_PARAMS = {
     }
 }
 
-# 데이터 캐싱 설정 
+# Data Caching Settings
 USE_CACHING = False
 
-# 피처 정상성 검증 설정 
+# Feature Stationarity Check Settings
 CHECK_STATIONARITY = True
 STATIONARITY_SIGNIFICANCE_LEVEL = 0.05
 
-# 동적 오메가(Ω) 계산 설정
+# Dynamic Omega (Ω) Calculation Settings
 USE_DYNAMIC_OMEGA = True
 
-# 자산 그룹 및 제약 조건 설정
+# Asset Groups and Constraints Settings
 ASSET_GROUPS = {
     'US_EQUITY': ['SPY', 'QQQ', 'QQQQ', 'IWM', 'VTI', 'MDY', 'DIA', 'RSP', 'VTV', 'VUG', 'MTUM', 'QUAL', 'USMV', 'SCHD'],
     'US_SECTOR': ['XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLP'],
@@ -77,7 +77,7 @@ ASSET_GROUPS = {
 }
 
 GROUP_CONSTRAINTS = {
-    # 그룹명: {'min': 최소비중, 'max': 최대비중}
+    # Group Name: {'min': min_weight, 'max': max_weight}
     'US_EQUITY': {'min': 0.10, 'max': 0.70},
     'US_SECTOR': {'min': 0.00, 'max': 0.50},
     'INTL_EQUITY': {'min': 0.00, 'max': 0.40},
@@ -86,12 +86,12 @@ GROUP_CONSTRAINTS = {
     'REAL_ESTATE': {'min': 0.00, 'max': 0.4},
 }
 
-# True로 설정하면 포트폴리오의 월간 회전율을 MAX_TURNOVER 이하로 제한
+# If True, constrains the portfolio's monthly turnover to be below MAX_TURNOVER
 USE_TURNOVER_CONSTRAINT = False
 MAX_TURNOVER = 0.40
 
-# 비교 분석을 위한 벤치마크 리스트 설정
-# None은 1/N 포트폴리오(모든 자산에 동일 비중) 벤치마크를 의미
+# Benchmark list settings for comparative analysis
+# None represents a 1/N portfolio (equal weight on all assets) benchmark
 BENCHMARK_TICKERS = ['SPY', 'QQQ', None]
 
 def get_model_params(use_tuned_params=True):

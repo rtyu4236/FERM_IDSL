@@ -18,7 +18,7 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker='SPY')
     logger.info(f"[_calculate_long_term_delta] aligned_market shape={aligned_market.shape}, aligned_rf shape={aligned_rf.shape}")
     
     if aligned_market.empty or len(aligned_market) < 2:
-        logger.warning("장기 delta 계산 데이터 부족 (정렬 후 2개 미만), 기본값 2.5 사용")
+        logger.warning("Insufficient data for long-term delta calculation (less than 2 after alignment), using default value 2.5")
         logger.info("[_calculate_long_term_delta] Function exit (data insufficient).")
         return 2.5
 
@@ -28,17 +28,17 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker='SPY')
     logger.info(f"[_calculate_long_term_delta] market_excess_return_annualized={market_excess_return_annualized:.4f}, market_variance_annualized={market_variance_annualized:.4f}")
     
     if market_variance_annualized <= 0:
-        logger.warning(f"시장 수익률 분산 0 또는 음수, 유효한 장기 delta 계산 불가, 기본값 2.5 사용")
+        logger.warning(f"Market return variance is zero or negative, cannot calculate valid long-term delta, using default value 2.5")
         logger.info("[_calculate_long_term_delta] Function exit (variance invalid).")
         return 2.5
 
     long_term_delta = market_excess_return_annualized / market_variance_annualized
     
     if not np.isfinite(long_term_delta) or long_term_delta <= 0:
-        logger.warning(f"유효한 장기 delta 계산 불가 (결과 {long_term_delta:.2f}), 기본값 2.5 사용")
+        logger.warning(f"Cannot calculate valid long-term delta (result {long_term_delta:.2f}), using default value 2.5")
         long_term_delta = 2.5
     else:
-        logger.info(f"계산된 기본 delta: {long_term_delta:.2f}")
+        logger.info(f"Calculated default delta: {long_term_delta:.2f}")
     logger.info("[_calculate_long_term_delta] Function exit.")
     return long_term_delta
 
@@ -87,7 +87,7 @@ class BlackLittermanPortfolio:
         logger.info(f"[BlackLittermanPortfolio._calculate_inputs] Initial Sigma shape={Sigma.shape}")
 
         if np.trace(Sigma) < 1e-8:
-            logger.warning("공분산 행렬 0에 가까워 최적화 불가")
+            logger.warning("Covariance matrix is close to zero, optimization not possible.")
             logger.info("[BlackLittermanPortfolio._calculate_inputs] Function exit (Sigma invalid).")
             return None, None, None
 
@@ -109,7 +109,7 @@ class BlackLittermanPortfolio:
             logger.info(f"[BlackLittermanPortfolio._calculate_inputs] aligned_market shape={aligned_market.shape}")
 
             if aligned_market.empty or len(aligned_market) < 2:
-                logger.warning(f"Delta 계산 데이터 부족 (정렬 후 2개 미만), 기본값 {self.default_delta:.2f} 사용")
+                logger.warning(f"Insufficient data for delta calculation (less than 2 after alignment), using default value {self.default_delta:.2f}.")
                 delta = self.default_delta
             else:
                 market_excess_returns = aligned_market - aligned_rf
@@ -119,13 +119,13 @@ class BlackLittermanPortfolio:
                 if market_variance_annualized > 0:
                     delta = market_excess_return_annualized / market_variance_annualized
                 else:
-                    logger.warning(f"시장 수익률 분산 0 또는 유효하지 않음, 기본 delta값 {self.default_delta:.2f} 사용")
+                    logger.warning(f"Market return variance is zero or invalid, using default delta value {self.default_delta:.2f}.")
                     delta = self.default_delta
         else:
             delta = self.default_delta
 
         if not np.isfinite(delta) or delta <= 0:
-            logger.warning(f"계산된 delta 유효하지 않음 ({delta:.2f}), 기본값 {self.default_delta:.2f} 사용")
+            logger.warning(f"Calculated delta is invalid ({delta:.2f}), using default value {self.default_delta:.2f}.")
             delta = self.default_delta
         logger.info(f"[BlackLittermanPortfolio._calculate_inputs] Calculated delta={delta}")
 
@@ -173,16 +173,16 @@ class BlackLittermanPortfolio:
                 Sigma_post = Sigma + M
                 logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] mu_bl shape={mu_bl.shape}, Sigma_post shape={Sigma_post.shape}")
                 if not np.all(np.isfinite(mu_bl)):
-                    logger.warning("mu_bl에 유효하지 않은 값 포함, 균형 수익률 사용")
+                    logger.warning("mu_bl contains invalid values, using equilibrium returns.")
                     mu_bl = Pi
                     Sigma_post = Sigma
             except np.linalg.LinAlgError:
-                logger.warning("BL 계산 중 특이 행렬 발생, 균형 수익률 사용")
+                logger.warning("Singular matrix encountered during BL calculation, using equilibrium returns.")
                 mu_bl = Pi
                 Sigma_post = Sigma
         else:
             mu_bl = Pi
-            logger.info("제공된 ML 뷰 없음, 균형 수익률 사용")
+            logger.info("No ML views provided, using equilibrium returns.")
             
         expenses = np.array([self.expense_ratios.get(ticker, 0) for ticker in current_tickers])
         mu_bl_net = mu_bl - expenses
@@ -192,7 +192,7 @@ class BlackLittermanPortfolio:
         use_turnover = config.USE_TURNOVER_CONSTRAINT and previous_weights is not None and not previous_weights.empty
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] use_turnover={use_turnover}")
         if use_turnover:
-            logger.info(f"거래 회전율 제약 조건 적용 (최대: {config.MAX_TURNOVER:.0%})")
+            logger.info(f"Applying turnover constraint (max: {config.MAX_TURNOVER:.0%})")
             P_opt = matrix(np.block([[delta * Sigma_post, np.zeros((n, n))], [np.zeros((n, n)), np.zeros((n, n))]]))
             q_opt = matrix(np.hstack([-mu_bl_net, np.zeros(n)]))
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] P_opt shape={P_opt.size}, q_opt shape={q_opt.size}")
@@ -228,7 +228,7 @@ class BlackLittermanPortfolio:
             b = matrix(1.0)
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] A shape={A.size}, b shape={b.size}")
 
-        else: # 거래 회전율 제약이 없는 경우
+        else: # If there is no turnover constraint
             P_opt = matrix(delta * Sigma_post)
             q_opt = matrix(-mu_bl_net)
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] P_opt shape={P_opt.size}, q_opt shape={q_opt.size}")
@@ -264,7 +264,7 @@ class BlackLittermanPortfolio:
             weights = result_x[:n]
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Optimization successful. weights shape={weights.shape}")
         except ValueError as e:
-            logger.error(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] CVXOPT 오류 {e}, 동일 가중치로 대체")
+            logger.error(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] CVXOPT Error {e}, replacing with equal weights.")
             weights = np.ones(n) / n
 
         weights[weights < 1e-5] = 0
@@ -272,10 +272,10 @@ class BlackLittermanPortfolio:
         portfolio = pd.Series(weights, index=current_tickers)
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Final portfolio weights shape={portfolio.shape}")
         
-        logger.info("포트폴리오 구성 완료")
+        logger.info("Portfolio construction complete.")
         active_portfolio = portfolio[portfolio > 0]
         assets_log_str = ', '.join([f'{idx} {val:.4f}' for idx, val in active_portfolio.round(4).items()])
-        log_str = f"{len(active_portfolio)}개 종목: {assets_log_str}"
+        log_str = f"{len(active_portfolio)} assets: {assets_log_str}"
         logger.info(log_str)
         logger.info("[BlackLittermanPortfolio.get_black_litterman_portfolio] Function exit.")
         return portfolio, mu_bl_net

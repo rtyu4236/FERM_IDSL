@@ -61,15 +61,20 @@ class TCN_SVR_Model:
         logger.info(f"[TCN_SVR_Model.fit] Input: y_train_returns_numpy shape={y_train_returns_numpy.shape}, dtype={y_train_returns_numpy.dtype}")
         logger.info(f"[TCN_SVR_Model.fit] Training TCN for {epochs} epochs with patience={patience}, min_delta={min_delta}")
 
-        # Split data into training and validation sets for early stopping
-        # Assuming X_train_tensor is (N, L, C) and y_train_indicators_tensor is (N, Output_size)
-        # We need to split N samples.
         from sklearn.model_selection import train_test_split
-        X_train_tcn, X_val_tcn, y_train_tcn, y_val_tcn = train_test_split(
-            X_train_tensor, y_train_indicators_tensor, test_size=0.2, random_state=42
-        )
-        logger.info(f"[TCN_SVR_Model.fit] TCN train split: X_train_tcn shape={X_train_tcn.shape}, y_train_tcn shape={y_train_tcn.shape}")
-        logger.info(f"[TCN_SVR_Model.fit] TCN val split: X_val_tcn shape={X_val_tcn.shape}, y_val_tcn shape={y_val_tcn.shape}")
+        MIN_SAMPLES_FOR_SPLIT = 5
+        can_validate = X_train_tensor.shape[0] >= MIN_SAMPLES_FOR_SPLIT
+
+        if can_validate:
+            X_train_tcn, X_val_tcn, y_train_tcn, y_val_tcn = train_test_split(
+                X_train_tensor, y_train_indicators_tensor, test_size=0.2, shuffle=False
+            )
+            logger.info(f"[TCN_SVR_Model.fit] TCN train split: X_train_tcn shape={X_train_tcn.shape}, y_train_tcn shape={y_train_tcn.shape}")
+            logger.info(f"[TCN_SVR_Model.fit] TCN val split: X_val_tcn shape={X_val_tcn.shape}, y_val_tcn shape={y_val_tcn.shape}")
+        else:
+            logger.warning(f"Not enough samples ({X_train_tensor.shape[0]}) to create a validation set. Skipping early stopping.")
+            X_train_tcn = X_train_tensor
+            y_train_tcn = y_train_indicators_tensor
 
         best_loss = float('inf')
         patience_counter = 0
@@ -84,34 +89,34 @@ class TCN_SVR_Model:
             loss.backward()
             self.optimizer.step()
 
-            # Evaluate on validation set
-            self.net.eval()
-            with torch.no_grad():
-                val_output = self.net(X_val_tcn.permute(0, 2, 1))
-                val_loss = self.criterion(val_output, y_val_tcn)
-            
-            if (epoch + 1) % 10 == 0:
-                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+            if can_validate:
+                self.net.eval()
+                with torch.no_grad():
+                    val_output = self.net(X_val_tcn.permute(0, 2, 1))
+                    val_loss = self.criterion(val_output, y_val_tcn)
+                
+                if (epoch + 1) % 10 == 0:
+                    logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
 
-            # Early stopping logic
-            if val_loss.item() < best_loss - min_delta:
-                best_loss = val_loss.item()
-                patience_counter = 0
-                best_model_state = self.net.state_dict() # Save best model state
-                logger.info(f"[TCN_SVR_Model.fit] New best validation loss: {best_loss:.4f}")
-            else:
-                patience_counter += 1
-                logger.info(f"[TCN_SVR_Model.fit] Validation loss not improved. Patience counter: {patience_counter}")
+                if val_loss.item() < best_loss - min_delta:
+                    best_loss = val_loss.item()
+                    patience_counter = 0
+                    best_model_state = self.net.state_dict()
+                    logger.info(f"[TCN_SVR_Model.fit] New best validation loss: {best_loss:.4f}")
+                else:
+                    patience_counter += 1
+                    logger.info(f"[TCN_SVR_Model.fit] Validation loss not improved. Patience counter: {patience_counter}")
 
-            if patience_counter >= patience:
-                logger.info(f"[TCN_SVR_Model.fit] Early stopping triggered after {epoch+1} epochs.")
-                break
+                if patience_counter >= patience:
+                    logger.info(f"[TCN_SVR_Model.fit] Early stopping triggered after {epoch+1} epochs.")
+                    break
+            elif (epoch + 1) % 10 == 0:
+                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}")
         
-        # Restore best model weights
-        if best_model_state:
+        if can_validate and best_model_state:
             self.net.load_state_dict(best_model_state)
             logger.info("[TCN_SVR_Model.fit] Restored best model weights.")
-        self.best_loss = best_loss # Store best loss as an attribute
+        self.best_loss = best_loss if can_validate else loss.item()
 
         logger.info("[TCN_SVR_Model.fit] TCN training complete. Predicting indicators on training data.")
         self.net.eval()

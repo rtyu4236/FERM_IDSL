@@ -46,52 +46,52 @@ def _calculate_returns_from_cumulative(cumulative_returns):
 def generate_performance_tables(strategy_returns, benchmark_returns):
     logger.info("[generate_performance_tables] Function entry.")
     logger.info(f"[generate_performance_tables] Input: strategy_returns shape={strategy_returns.shape}, benchmark_returns shape={benchmark_returns.shape}")
-    logger.info("성과 분석 표 생성을 시작합니다.")
+    logger.info("Starting generation of performance analysis tables.")
     if strategy_returns.empty:
-        logger.warning("성과 분석 표를 생성할 수 없음: 입력 데이터가 비어있음.")
+        logger.warning("Cannot generate performance analysis tables: input data is empty.")
         logger.info("[generate_performance_tables] Function exit (empty strategy_returns).")
         return
     all_returns = pd.concat([strategy_returns, benchmark_returns], axis=1)
     logger.info(f"[generate_performance_tables] all_returns shape={all_returns.shape}")
     try:
-        logger.info("주요 성과 지표 표 생성 중...")
+        logger.info("Generating key performance metrics table...")
         metrics_df = qs.reports.metrics(all_returns, mode='full')
         if metrics_df is not None:
             logger.info(f"[generate_performance_tables] metrics_df shape={metrics_df.shape}")
             metrics_path = os.path.join(OUTPUT_DIR, 'table_1_performance_summary.csv')
             metrics_df.to_csv(metrics_path)
             _save_df_as_image(metrics_df, 'table_1_performance_summary.png')
-            logger.info(f"성공: 주요 성과 지표 표 저장 완료.")
+            logger.info(f"Success: Key performance metrics table saved.")
         else:
-            logger.error("실패: 메트릭 데이터프레임이 생성되지 않았습니다.")
+            logger.error("Failed: Metrics dataframe was not generated.")
     except Exception as e:
-        logger.error(f"실패: 주요 성과 지표 표 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate key performance metrics table: {e}")
         logger.error(traceback.format_exc())
     try:
-        logger.info("연도별 수익률 표 생성 중...")
+        logger.info("Generating annual returns table...")
         yearly_returns_df = all_returns.resample('Y').apply(qs.stats.comp).T
         yearly_returns_df.columns = yearly_returns_df.columns.strftime('%Y')
         logger.info(f"[generate_performance_tables] yearly_returns_df shape={yearly_returns_df.shape}")
         yearly_path = os.path.join(OUTPUT_DIR, 'table_2_annual_returns.csv')
         yearly_returns_df.to_csv(yearly_path)
         _save_df_as_image(yearly_returns_df, 'table_2_annual_returns.png')
-        logger.info(f"성공: 연도별 수익률 표 저장 완료.")
+        logger.info(f"Success: Annual returns table saved.")
     except Exception as e:
-        logger.error(f"실패: 연도별 수익률 표 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate annual returns table: {e}")
         logger.error(traceback.format_exc())
     try:
-        logger.info("최악 낙폭 기간 표 생성 중...")
+        logger.info("Generating worst drawdown periods table...")
         drawdown_df = qs.stats.drawdown_details(strategy_returns)
         if not drawdown_df.empty:
             logger.info(f"[generate_performance_tables] drawdown_df shape={drawdown_df.shape}")
             drawdown_path = os.path.join(OUTPUT_DIR, 'table_3_drawdown_analysis.csv')
             drawdown_df.to_csv(drawdown_path)
             _save_df_as_image(drawdown_df, 'table_3_drawdown_analysis.png')
-            logger.info(f"성공: 최악 낙폭 기간 표 저장 완료.")
+            logger.info(f"Success: Drawdown analysis table saved.")
         else:
-            logger.info("낙폭 기간 데이터가 없어 표를 생성하지 않음.")
+            logger.info("No drawdown data available, skipping table generation.")
     except Exception as e:
-        logger.error(f"실패: 최악 낙폭 기간 표 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate drawdown analysis table: {e}")
         logger.error(traceback.format_exc())
     logger.info("[generate_performance_tables] Function exit.")
 
@@ -99,9 +99,9 @@ def generate_performance_tables(strategy_returns, benchmark_returns):
 def generate_factor_analysis_table(strategy_returns, ff_df):
     logger.info("[generate_factor_analysis_table] Function entry.")
     logger.info(f"[generate_factor_analysis_table] Input: strategy_returns shape={strategy_returns.shape}, ff_df shape={ff_df.shape}")
-    logger.info("파마-프렌치 3요인 회귀분석을 시작합니다.")
+    logger.info("Starting Fama-French 3-factor regression analysis.")
     if strategy_returns.empty:
-        logger.warning("회귀분석을 할 수 없음: 입력 데이터가 비어있음.")
+        logger.warning("Cannot perform regression analysis: input data is empty.")
         logger.info("[generate_factor_analysis_table] Function exit (empty strategy_returns).")
         return
     try:
@@ -109,7 +109,7 @@ def generate_factor_analysis_table(strategy_returns, ff_df):
         merged_data = pd.merge(strategy_returns, ff_df, left_index=True, right_index=True, how='inner')
         logger.info(f"[generate_factor_analysis_table] merged_data shape={merged_data.shape}")
         if merged_data.empty or len(merged_data) < 2:
-            logger.warning("회귀분석 데이터 부족으로 실행 중단.")
+            logger.warning("Stopping regression analysis due to insufficient data.")
             logger.info("[generate_factor_analysis_table] Function exit (insufficient merged_data).")
             return
         y = merged_data[strategy_returns.name] - merged_data['RF']
@@ -125,18 +125,18 @@ def generate_factor_analysis_table(strategy_returns, ff_df):
         logger.info(f"[generate_factor_analysis_table] results_df shape={results_df.shape}")
         factor_path = os.path.join(OUTPUT_DIR, 'table_4_fama_french_regression.csv')
         results_df.to_csv(factor_path)
-        logger.info(f"성공: 파마-프렌치 회귀분석 결과 표 저장 완료.")
+        logger.info(f"Success: Fama-French regression results table saved.")
     except Exception as e:
-        logger.error(f"실패: 파마-프렌치 회귀분석 실패: {e}")
+        logger.error(f"Failed: Fama-French regression analysis failed: {e}")
         logger.error(traceback.format_exc())
     logger.info("[generate_factor_analysis_table] Function exit.")
 
 def plot_cumulative_returns(cumulative_df):
     logger.info("[plot_cumulative_returns] Function entry.")
     logger.info(f"[plot_cumulative_returns] Input: cumulative_df shape={cumulative_df.shape}")
-    logger.info("누적 수익률 그래프를 생성합니다.")
+    logger.info("Generating cumulative returns plot.")
     if cumulative_df.empty:
-        logger.warning("누적 수익률 그래프를 생성할 수 없음: 입력 데이터가 비어있음.")
+        logger.warning("Cannot generate cumulative returns plot: input data is empty.")
         logger.info("[plot_cumulative_returns] Function exit (empty cumulative_df).")
         return
     try:
@@ -147,45 +147,45 @@ def plot_cumulative_returns(cumulative_df):
         fig = qs.plots.returns(returns_for_plot, benchmark=benchmarks_for_plot, 
                                savefig=os.path.join(OUTPUT_DIR, 'plot_1_cumulative_returns.png'))
         plt.close(fig)
-        logger.info(f"성공: 누적 수익률 그래프 저장 완료.")
+        logger.info(f"Success: Cumulative returns plot saved.")
     except Exception as e:
-        logger.error(f"실패: 누적 수익률 그래프 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate cumulative returns plot: {e}")
         logger.error(traceback.format_exc())
     logger.info("[plot_cumulative_returns] Function exit.")
 
 def plot_underwater(strategy_returns):
     logger.info("[plot_underwater] Function entry.")
     logger.info(f"[plot_underwater] Input: strategy_returns shape={strategy_returns.shape}")
-    logger.info("수중 그래프(Underwater Plot)를 생성합니다.")
+    logger.info("Generating underwater plot.")
     if strategy_returns.empty:
-        logger.warning("수중 그래프를 생성할 수 없음: 입력 데이터가 비어있음.")
+        logger.warning("Cannot generate underwater plot: input data is empty.")
         logger.info("[plot_underwater] Function exit (empty strategy_returns).")
         return
     try:
         fig = qs.plots.drawdown(strategy_returns, 
                                 savefig=os.path.join(OUTPUT_DIR, 'plot_2_underwater.png'))
         plt.close(fig)
-        logger.info(f"성공: 수중 그래프 저장 완료.")
+        logger.info(f"Success: Underwater plot saved.")
     except Exception as e:
-        logger.error(f"실패: 수중 그래프 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate underwater plot: {e}")
         logger.error(traceback.format_exc())
     logger.info("[plot_underwater] Function exit.")
 
 def plot_additional_analytics(strategy_returns):
     logger.info("[plot_additional_analytics] Function entry.")
     logger.info(f"[plot_additional_analytics] Input: strategy_returns shape={strategy_returns.shape}")
-    logger.info("추가 분석 그래프(월별 수익률, 롤링 통계) 생성을 시작합니다.")
+    logger.info("Starting generation of additional analytics plots (monthly returns, rolling stats).")
     if strategy_returns.empty:
-        logger.warning("추가 분석 그래프를 생성할 수 없음: 입력 데이터가 비어있음.")
+        logger.warning("Cannot generate additional analytics plots: input data is empty.")
         logger.info("[plot_additional_analytics] Function exit (empty strategy_returns).")
         return
     try:
         fig = qs.plots.monthly_returns(strategy_returns, 
                                        savefig=os.path.join(OUTPUT_DIR, 'plot_3_monthly_returns.png'))
         plt.close(fig)
-        logger.info(f"성공: 월별 수익률 그래프 저장 완료.")
+        logger.info(f"Success: Monthly returns plot saved.")
     except Exception as e:
-        logger.error(f"실패: 월별 수익률 그래프 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate monthly returns plot: {e}")
         logger.error(traceback.format_exc())
     
     ROLLING_WINDOW = 12
@@ -195,28 +195,28 @@ def plot_additional_analytics(strategy_returns):
             fig = qs.plots.rolling_volatility(strategy_returns, 
                                               savefig=os.path.join(OUTPUT_DIR, 'plot_4_rolling_volatility.png'))
             plt.close(fig)
-            logger.info(f"성공: 롤링 변동성 그래프 저장 완료.")
+            logger.info(f"Success: Rolling volatility plot saved.")
         except Exception as e:
-            logger.error(f"실패: 롤링 변동성 그래프 생성 실패: {e}")
+            logger.error(f"Failed: Could not generate rolling volatility plot: {e}")
             logger.error(traceback.format_exc())
         try:
             fig = qs.plots.rolling_sharpe(strategy_returns, 
                                           savefig=os.path.join(OUTPUT_DIR, 'plot_5_rolling_sharpe.png'))
             plt.close(fig)
-            logger.info(f"성공: 롤링 샤프 지수 그래프 저장 완료.")
+            logger.info(f"Success: Rolling Sharpe ratio plot saved.")
         except Exception as e:
-            logger.error(f"실패: 롤링 샤프 지수 그래프 생성 실패: {e}")
+            logger.error(f"Failed: Could not generate rolling Sharpe ratio plot: {e}")
             logger.error(traceback.format_exc())
     else:
-        logger.warning(f"롤링 통계 그래프 생성 중단: 데이터 기간({len(strategy_returns)}개월)이 롤링 기간({ROLLING_WINDOW}개월)보다 짧습니다.")
+        logger.warning(f"Skipping rolling stats plots: data period ({len(strategy_returns)} months) is shorter than rolling window ({ROLLING_WINDOW} months).")
     logger.info("[plot_additional_analytics] Function exit.")
 
 def plot_monthly_returns_comparison(returns_df):
     logger.info("[plot_monthly_returns_comparison] Function entry.")
     logger.info(f"[plot_monthly_returns_comparison] Input: returns_df shape={returns_df.shape}")
-    logger.info("월별 수익률 비교 그래프 생성을 시작합니다.")
+    logger.info("Starting generation of monthly returns comparison plot.")
     if returns_df.empty:
-        logger.warning("월별 수익률 비교 그래프를 생성할 수 없음: 입력 데이터가 비어있음.")
+        logger.warning("Cannot generate monthly returns comparison plot: input data is empty.")
         logger.info("[plot_monthly_returns_comparison] Function exit (empty returns_df).")
         return
     try:
@@ -231,18 +231,18 @@ def plot_monthly_returns_comparison(returns_df):
         path = os.path.join(OUTPUT_DIR, 'plot_6_monthly_returns_comparison.png')
         fig.savefig(path, dpi=200)
         plt.close(fig)
-        logger.info(f"성공: 월별 수익률 비교 그래프 저장 완료.")
+        logger.info(f"Success: Monthly returns comparison plot saved.")
     except Exception as e:
-        logger.error(f"실패: 월별 수익률 비교 그래프 생성 실패: {e}")
+        logger.error(f"Failed: Could not generate monthly returns comparison plot: {e}")
         logger.error(traceback.format_exc())
     logger.info("[plot_monthly_returns_comparison] Function exit.")
 
 def run_visualization(cumulative_df, ff_df):
     logger.info("[run_visualization] Function entry.")
     logger.info(f"[run_visualization] Input: cumulative_df shape={cumulative_df.shape}, ff_df shape={ff_df.shape}")
-    logger.info("시각화 및 분석 프로세스 시작")
+    logger.info("Starting visualization and analysis process.")
     if cumulative_df.empty:
-        logger.warning("시각화 프로세스 중단: 누적 수익률 데이터가 비어있음.")
+        logger.warning("Stopping visualization process: cumulative returns data is empty.")
         logger.info("[run_visualization] Function exit (empty cumulative_df).")
         return
     returns_df = _calculate_returns_from_cumulative(cumulative_df)
@@ -256,7 +256,7 @@ def run_visualization(cumulative_df, ff_df):
     plot_underwater(strategy_returns)
     plot_additional_analytics(strategy_returns)
     plot_monthly_returns_comparison(returns_df)
-    logger.info("시각화 및 분석 프로세스 완료")
+    logger.info("Visualization and analysis process complete.")
     logger.info("[run_visualization] Function exit.")
 
 if __name__ == '__main__':
@@ -267,7 +267,7 @@ if __name__ == '__main__':
         _, _, _, ff_df, _ = data_manager.load_raw_data()
         run_visualization(cumulative_df, ff_df)
     except FileNotFoundError:
-        logger.error("visualizer.py를 단독으로 실행하려면 먼저 백테스트를 실행하여 'cumulative_returns.csv'를 생성해야 합니다.")
+        logger.error("To run visualizer.py standalone, you must first run the backtest to generate 'cumulative_returns.csv'.")
     except Exception as e:
-        logger.error(f"visualizer.py 단독 실행 중 오류 발생: {e}")
+        logger.error(f"Error running visualizer.py standalone: {e}")
         logger.error(traceback.format_exc())

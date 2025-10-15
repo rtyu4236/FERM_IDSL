@@ -25,16 +25,16 @@ def calculate_hurst_exponent(time_series, max_lag=100):
 
 def load_raw_data():
     """
-    모든 raw 데이터 파일을 로드하고 초기 정제 작업 수행
+    Load and perform initial cleaning of all raw data files.
     """
-    logger.info("raw 데이터 파일 로드 시작")
+    logger.info("Starting to load raw data files.")
     
-    # 일별 데이터 로드 및 컬럼명 소문자 통일
+    # Load daily data and unify column names to lowercase
     daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily_all.csv'), low_memory=False)
     daily_df.columns = [col.lower() for col in daily_df.columns]
     daily_df['date'] = pd.to_datetime(daily_df['date'])
     
-    # 월별 데이터 로드 및 컬럼명 소문자 통일
+    # Load monthly data and unify column names to lowercase
     monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly_all.csv'))
     monthly_df.columns = [col.lower() for col in monthly_df.columns]
     monthly_df['date'] = pd.to_datetime(monthly_df['date'])
@@ -44,7 +44,7 @@ def load_raw_data():
     monthly_df.rename(columns={'vwretd': 'retx'}, inplace=True)
 
     all_tickers = monthly_df['ticker'].unique().tolist()
-    logger.info(f"데이터에서 총 {len(all_tickers)}개의 고유 티커 발견")
+    logger.info(f"Found a total of {len(all_tickers)} unique tickers in the data.")
 
     vix_df = pd.read_csv(os.path.join(config.DATA_DIR, 'vix_index.csv'))
     vix_df.rename(columns={'Date': 'date'}, inplace=True)
@@ -57,17 +57,17 @@ def load_raw_data():
     ff_df['date'] = ff_df['date'] + pd.offsets.MonthEnd(0)
     ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']] = ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']].astype(float) / 100
     
-    logger.info("raw 데이터 로딩 완료")
+    logger.info("Raw data loading complete.")
     return daily_df, monthly_df, vix_df, ff_df, all_tickers
 
 def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
-    """머신러닝 모델을 위한 통합 피처(feature) 데이터셋 생성"""
+    """Create a unified feature dataset for machine learning models."""
     cache_path = os.path.join(config.CACHE_DIR, f'feature_dataset_stationary_{config.CHECK_STATIONARITY}.feather')
     if config.USE_CACHING and os.path.exists(cache_path):
-        logger.info(f"캐시된 피처 데이터셋 로드: {cache_path}")
+        logger.info(f"Loading cached feature dataset: {cache_path}")
         return pd.read_feather(cache_path)
 
-    logger.info("ML 모델용 피처 데이터셋 신규 생성 시작")
+    logger.info("Starting to create a new feature dataset for ML models.")
     logger.info(f"[DEBUG] Initial monthly_df columns: {monthly_df.columns.tolist()}")
     logger.info(f"[DEBUG] Initial daily_df columns: {daily_df.columns.tolist()}")
 
@@ -106,9 +106,9 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     logger.info(f"[DEBUG] final_df after initial merges shape: {final_df.shape}, columns: {final_df.columns.tolist()}")
     logger.info(f"[DEBUG] final_df head:\n{final_df.head()}")
 
-    logger.info("기술적 분석 지표 생성 시작")
+    logger.info("Starting to generate technical analysis indicators.")
     if 'close' not in daily_df.columns and 'vwretd' in daily_df.columns:
-        logger.warning("'close' 컬럼이 없어 'vwretd'를 기반으로 가상 종가를 생성합니다.")
+        logger.warning("'close' column not found. Generating a virtual close price based on 'vwretd'.")
         daily_df['close'] = daily_df.groupby('ticker')['vwretd'].transform(lambda x: (1 + x).cumprod())
     if 'high' not in daily_df.columns:
         daily_df['high'] = daily_df['close']
@@ -159,25 +159,24 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     logger.info(f"[DEBUG] Columns of final_df after merge: {final_df.columns.tolist()}")
     logger.info(f"[DEBUG] final_df head after TA merge:\n{final_df.head()}")
 
-    if config.CHECK_STATIONARITY:
-        logger.info("피처 정상성 검증 및 처리 시작")
-        features_to_check = [
-            'realized_vol', 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
-            'Mkt-RF', 'SMB', 'HML', 'RF',
-            'ATRr_14', 'ADX_14', 'DMP_14', 'DMN_14', 'EMA_20',
-            'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9',
-            'SMA_50', 'HURST', 'RSI_14'
-        ]
-        for col in features_to_check:
-            if col not in final_df.columns or final_df[col].isnull().all():
-                logger.warning(f"[DEBUG] Skipping stationarity check for {col}: not in final_df or all null.")
-                continue
-            p_value = adfuller(final_df[col].dropna())[1]
-            if p_value > config.STATIONARITY_SIGNIFICANCE_LEVEL:
-                logger.info(f"  - '{col}' 피처 비정상성, 1차 차분 수행 (p-value {p_value:.4f})")
-                final_df[col] = final_df.groupby('ticker')[col].diff()
-            else:
-                logger.info(f"  - '{col}' 피처 정상성 만족 (p-value {p_value:.4f})")
+    # if config.CHECK_STATIONARITY:
+    #     logger.info("Starting feature stationarity check and processing")
+    #     features_to_check = [
+    #         'realized_vol', 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
+    #         'Mkt-RF', 'SMB', 'HML', 'RF',
+    #         'ATRr_14', 'ADX_14', 'DMP_14', 'DMN_14', 'EMA_20',
+    #         'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9',
+    #         'SMA_50', 'HURST', 'RSI_14'
+    #     ]
+    #     for col in features_to_check:
+    #         if col not in final_df.columns or final_df[col].isnull().all():
+    #             continue
+    #         p_value = adfuller(final_df[col].dropna())[1]
+    #         if p_value > config.STATIONARITY_SIGNIFICANCE_LEVEL:
+    #             logger.info(f"  - Feature '{col}' is non-stationary, performing 1st differencing (p-value {p_value:.4f})")
+    #             final_df[col] = final_df.groupby('ticker')[col].diff()
+    #         else:
+    #             logger.info(f"  - Feature '{col}' is stationary (p-value {p_value:.4f})")
 
     final_df = final_df.dropna(subset=['target_return'])
     logger.info(f"[DEBUG] final_df shape after dropping NaNs for target_return: {final_df.shape}")
@@ -193,24 +192,24 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     if config.USE_CACHING:
         os.makedirs(config.CACHE_DIR, exist_ok=True)
         final_df.to_feather(cache_path)
-        logger.info(f"피처 데이터셋 캐시 저장 완료: {cache_path}")
+        logger.info(f"Feature dataset cached successfully: {cache_path}")
 
-    logger.info("피처 데이터셋 생성 완료")
+    logger.info("Feature dataset creation complete.")
     return final_df
 
 def filter_liquid_universe(daily_df, all_tickers, start_year, min_avg_value=1_000_000):
-    """거래대금 기준으로 투자 유니버스를 필터링합니다."""
+    """Filters the investment universe based on trading value."""
     logger.info("Starting universe pre-filtering based on liquidity...")
     
-    # 'prc'와 'vol' 컬럼이 없으면 필터링을 건너<binary data, 1 bytes>니다.
+    # Skip filtering if 'prc' or 'vol' columns are missing.
     if 'prc' not in daily_df.columns or 'vol' not in daily_df.columns:
         logger.warning("'prc' or 'vol' not found in daily_df, skipping liquidity filter.")
         return all_tickers
 
-    # 거래대금 계산
+    # Calculate trading value
     daily_df['value'] = daily_df['prc'] * daily_df['vol']
     
-    # 백테스트 시작일 기준, 지난 3개월간의 일평균 거래대금 계산
+    # Calculate the average daily trading value for the last 3 months from the backtest start date
     filter_end_date = pd.to_datetime(f"{start_year}-01-01")
     filter_start_date = filter_end_date - pd.DateOffset(months=3)
     
@@ -221,7 +220,7 @@ def filter_liquid_universe(daily_df, all_tickers, start_year, min_avg_value=1_00
     
     avg_daily_value = liquidity_df.groupby('ticker')['value'].mean()
     
-    # 거래대금 기준을 만족하는 티커만 선택
+    # Select only tickers that meet the trading value criteria
     liquid_tickers = avg_daily_value[avg_daily_value >= min_avg_value].index.tolist()
     
     logger.info(f"Pre-filtering complete. {len(all_tickers)} tickers -> {len(liquid_tickers)} liquid tickers.")
@@ -231,7 +230,105 @@ def filter_liquid_universe(daily_df, all_tickers, start_year, min_avg_value=1_00
 if __name__ == '__main__':
     daily, monthly, vix, ff, _ = load_raw_data()
     feature_dataset = create_feature_dataset(daily, monthly, vix, ff)
-    logger.info("\n피처 데이터셋 샘플")
+    logger.info("\nFeature dataset sample")
     logger.info(feature_dataset.head())
-    logger.info("\n피처 데이터셋 정보")
+    logger.info("\nFeature dataset info")
     feature_dataset.info()
+
+def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
+    """
+    Generates a 'daily' time-series feature dataset for TCN-SVR model training, following the paper's methodology.
+    """
+    cache_path = os.path.join(config.CACHE_DIR, 'daily_feature_dataset_tcn.feather')
+    if config.USE_CACHING and os.path.exists(cache_path):
+        logger.info(f"Loading cached daily feature dataset: {cache_path}")
+        return pd.read_feather(cache_path)
+
+    logger.info("Starting to create a new daily feature dataset for TCN-SVR.")
+
+    # 1. Calculate technical indicators directly on daily data
+    # Prepare OHLCV data (similar to existing code)
+    df = daily_df.copy()
+    if 'close' not in df.columns and 'vwretd' in df.columns:
+        logger.warning("'close' column not found. Generating a virtual close price based on 'vwretd'.")
+        df['close'] = df.groupby('ticker')['vwretd'].transform(lambda x: (1 + x).cumprod())
+    if 'high' not in df.columns:
+        df['high'] = df['close']
+    if 'low' not in df.columns:
+        df['low'] = df['close']
+    if 'open' not in df.columns:
+        df['open'] = df.groupby('ticker')['close'].shift(1)
+    if 'volume' not in df.columns:
+        df['volume'] = 0
+    df.fillna(method='ffill', inplace=True)
+
+    def apply_ta(group):
+        group.ta.atr(append=True)
+        group.ta.adx(append=True)
+        group.ta.ema(length=20, append=True)
+        group.ta.macd(append=True)
+        group.ta.sma(length=50, append=True)
+        group['HURST'] = calculate_hurst_exponent(group['close'].values)
+        group.ta.rsi(append=True)
+        # FGI is external data, so separate daily FGI data must be merged at this step.
+        return group
+
+    logger.info("Generating daily technical analysis indicators...")
+    df_with_ta = df.groupby('ticker', group_keys=False).apply(apply_ta)
+    
+    # 2. Merge macro-economic data (VIX, F-F) on a daily basis
+    # Expand monthly F-F data to daily (Forward Fill)
+    ff_daily = ff_df.set_index('date').resample('D').ffill().reset_index()
+    vix_daily = vix_df.copy()
+    vix_daily.rename(columns={'^VIX': 'avg_vix'}, inplace=True) # VIX is already daily data
+    vix_daily['vol_of_vix'] = vix_daily['avg_vix'].rolling(window=21).std()
+
+    macro_daily_df = pd.merge(vix_daily[['date', 'avg_vix', 'vol_of_vix']], ff_daily, on='date', how='left')
+    
+    final_df = pd.merge(df_with_ta, macro_daily_df, on='date', how='left')
+
+    # Add realized volatility (rolling 21-day std of returns)
+    final_df['realized_vol'] = final_df.groupby('ticker')['vwretd'].transform(lambda x: x.rolling(window=21).std())
+
+    # Add intra-month max drawdown (rolling 21-day)
+    def rolling_max_drawdown(series):
+        roll_max = series.rolling(window=21, min_periods=1).max()
+        daily_dd = series / roll_max - 1.0
+        return daily_dd.rolling(window=21, min_periods=1).min()
+
+    final_df['intra_month_mdd'] = final_df.groupby('ticker')['close'].transform(rolling_max_drawdown)
+    
+    # Group by ticker and ffill to fill macro NaNs on weekends/holidays
+    macro_cols = ['avg_vix', 'Mkt-RF', 'SMB', 'HML', 'RF', 'vol_of_vix']
+    final_df[macro_cols] = final_df.groupby('ticker')[macro_cols].ffill()
+    
+    # also ffill the new features
+    final_df[['realized_vol', 'intra_month_mdd']] = final_df.groupby('ticker')[['realized_vol', 'intra_month_mdd']].ffill()
+
+    # 3. Create Target variables: values after "20 days"
+    logger.info("Creating target variables for predicting 20 trading days ahead...")
+    indicator_features = ['ATRr_14', 'ADX_14', 'EMA_20', 'MACD_12_26_9', 'SMA_50', 'HURST', 'RSI_14']
+    
+    # TCN's target: technical indicators after 20 days
+    for col in indicator_features:
+        if col in final_df.columns:
+            final_df[f'target_{col}'] = final_df.groupby('ticker')[col].shift(-20)
+            
+    # SVR's final target: cumulative return after 20 days
+    future_price = final_df.groupby('ticker')['close'].shift(-20)
+    final_df['target_return'] = (future_price / final_df['close']) - 1
+
+    # 4. Finalize dataset
+    # Create lag features or other additional features (if necessary)
+    # ...
+    
+    # Remove last days' data as they have no target value (NaN)
+    final_df = final_df.dropna(subset=['target_return'])
+    final_df = final_df.reset_index(drop=True)
+
+    if config.USE_CACHING:
+        final_df.to_feather(cache_path)
+        logger.info(f"Daily feature dataset cached successfully: {cache_path}")
+
+    logger.info("Daily feature dataset for TCN-SVR created successfully.")
+    return final_df
