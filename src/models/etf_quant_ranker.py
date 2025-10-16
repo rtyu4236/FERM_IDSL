@@ -10,23 +10,23 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 RANDOM_SEED = 42
 
-def create_etf_universe_from_daily(daily_df, etf_tickers=None):
+def create_etf_universe_from_daily(daily_df, etf_permnos=None):
     """
     A modified function to create ETF universe data using actual OHLCV values from CRSP daily_df.
     Args:
         daily_df (pd.DataFrame): Daily CRSP data (columns are assumed to be lowercase)
-        etf_tickers (list): List of ETF tickers. If None, all tickers are used.
+        etf_permnos (list): List of ETF PERMNOs. If None, all are used.
     Returns:
-        pd.DataFrame: ETF universe data (MultiIndex: date, ticker)
+        pd.DataFrame: ETF universe data (MultiIndex: date, permno)
     """
-    required_cols = ['date', 'ticker', 'openprc', 'askhi', 'bidlo', 'prc', 'vol']
+    required_cols = ['date', 'permno', 'openprc', 'askhi', 'bidlo', 'prc', 'vol']
     missing_cols = [col for col in required_cols if col not in daily_df.columns]
     if missing_cols:
         raise ValueError(f"Required columns are missing: {missing_cols}")
     
     df_filtered = daily_df.copy()
-    if etf_tickers is not None:
-        df_filtered = df_filtered[df_filtered['ticker'].isin(etf_tickers)]
+    if etf_permnos is not None:
+        df_filtered = df_filtered[df_filtered['permno'].isin(etf_permnos)]
     
     ohlcv_cols = ['openprc', 'askhi', 'bidlo', 'prc', 'vol']
     df_clean = df_filtered.dropna(subset=ohlcv_cols)
@@ -39,9 +39,8 @@ def create_etf_universe_from_daily(daily_df, etf_tickers=None):
     df_clean['volume'] = df_clean['vol']
     
     df_clean['date'] = pd.to_datetime(df_clean['date'])
-    etf_universe = df_clean.set_index(['date', 'ticker'])
+    etf_universe = df_clean.set_index(['date', 'permno'])
     
-    # Primary sort: sort immediately after creating the index
     etf_universe.sort_index(inplace=True)
 
     return etf_universe[['open', 'high', 'low', 'close', 'volume']]
@@ -64,7 +63,7 @@ class ETFQuantRanker:
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Calculating factors...")
-        grouped = df.groupby(level='ticker')['close']
+        grouped = df.groupby(level='permno')['close']
         df['mom3m'] = grouped.pct_change(63)
         df['mom6m'] = grouped.pct_change(126)
         df['mom12m'] = grouped.pct_change(252)
@@ -75,25 +74,21 @@ class ETFQuantRanker:
         logger.info(f"Factor calculation complete. Valid data size: {factors_df.shape}")
         return factors_df
 
-    def get_top_tickers(self, analysis_date_str: str, daily_df: pd.DataFrame, all_tickers: list, top_n: int = 100):
+    def get_top_permnos(self, analysis_date_str: str, daily_df: pd.DataFrame, all_permnos: list, top_n: int = 100):
         analysis_date = pd.to_datetime(analysis_date_str)
         logger.info(f"Starting selection of top {top_n} ETFs as of {analysis_date_str}...")
 
-        # 1. Use data only up to the current point in time
         data_for_ranking = daily_df[daily_df['date'] <= analysis_date].copy()
-        etf_universe_df = create_etf_universe_from_daily(data_for_ranking, etf_tickers=all_tickers)
+        etf_universe_df = create_etf_universe_from_daily(data_for_ranking, etf_permnos=all_permnos)
 
-        # 2. Calculate factors with data up to the current point in time
         factors_df = self._calculate_factors(etf_universe_df)
 
-        # 3. Reset and sort index (to prevent UnsortedIndexError)
         factors_df.reset_index(inplace=True)
-        factors_df.set_index(['date', 'ticker'], inplace=True)
+        factors_df.set_index(['date', 'permno'], inplace=True)
         factors_df.sort_index(inplace=True)
 
         features = ['mom3m', 'mom6m', 'mom12m', 'rsi14', 'volatility']
         
-        # 4. Train and predict with ML models
         train_end_date = analysis_date - pd.DateOffset(days=1)
         train_start_date = train_end_date - pd.DateOffset(months=self.ml_training_window_months)
         
@@ -108,7 +103,6 @@ class ETFQuantRanker:
             y_train = train_df['target']
             X_predict = predict_df[features]
 
-            # Data cleaning (handle NaN, inf)
             X_train = X_train.replace([np.inf, -np.inf], np.nan)
             X_predict = X_predict.replace([np.inf, -np.inf], np.nan)
             imputer = SimpleImputer(strategy='median')
@@ -136,7 +130,6 @@ class ETFQuantRanker:
 
             ml_scores = ml_scores_df.mean(axis=1)
 
-        # 5. Calculate final scores and rank
         rebal_df = factors_df.loc[pd.IndexSlice[analysis_date, :]].copy()
         rebal_df['ml_score'] = ml_scores
         rebal_df.dropna(subset=['ml_score'], inplace=True)
@@ -153,7 +146,7 @@ class ETFQuantRanker:
         rebal_df['momentum_score'] = rebal_df[momentum_rank_cols].mean(axis=1)
         rebal_df['final_score'] = 0.5 * rebal_df['momentum_score'] + 0.5 * rebal_df['ml_score_rank']
 
-        top_tickers = rebal_df.sort_values('final_score', ascending=False).head(top_n).index.get_level_values('ticker').tolist()
+        top_permnos = rebal_df.sort_values('final_score', ascending=False).head(top_n).index.get_level_values('permno').tolist()
         
-        logger.info(f"Selection complete: {len(top_tickers)} ETFs")
-        return top_tickers
+        logger.info(f"Selection complete: {len(top_permnos)} ETFs")
+        return top_permnos

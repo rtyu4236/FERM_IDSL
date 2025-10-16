@@ -14,7 +14,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the backtesting and visualization process.")
     parser.add_argument('--no-tune', dest='tune', action='store_false', help="Skip the monthly rolling hyperparameter tuning.")
-    parser.add_argument('--no-ranking', dest='ranking', action='store_false', help="Skip the monthly ETF ranking and use all tickers.")
+    parser.add_argument('--no-ranking', dest='ranking', action='store_false', help="Skip the monthly ETF ranking and use all permnos.")
     parser.add_argument('--trials', type=int, default=50, help="Number of trials for hyperparameter tuning.")
     args = parser.parse_args()
 
@@ -22,16 +22,16 @@ if __name__ == '__main__':
     logger_setup.logger.info(f"Arguments: tune={args.tune}, ranking={args.ranking}, trials={args.trials}")
 
     # 1. Load all data
-    daily_df, monthly_df, vix_df, ff_df, all_tickers = data_manager.load_raw_data()
+    daily_df, monthly_df, vix_df, ff_df, all_permnos = data_manager.load_raw_data()
 
     # 2. Pre-filter the investment universe
-    initial_universe = all_tickers
+    initial_universe_permnos = all_permnos
     if args.ranking: # Only apply filtering if ranking is enabled
         # 2.1. Filter by liquidity
         logger_setup.logger.info("Starting universe pre-filtering based on liquidity...")
-        liquid_tickers = data_manager.filter_liquid_universe(
+        liquid_permnos = data_manager.filter_liquid_universe(
             daily_df=daily_df,
-            all_tickers=all_tickers,
+            all_permnos=all_permnos,
             start_year=config.START_YEAR
         )
         
@@ -41,14 +41,14 @@ if __name__ == '__main__':
         MIN_MONTHS = 5 * 12
 
         history_counts = monthly_df[
-            (monthly_df['ticker'].isin(liquid_tickers)) &
+            (monthly_df['permno'].isin(liquid_permnos)) &
             (monthly_df['date'] < filter_date)
-        ].groupby('ticker').size()
+        ].groupby('permno').size()
 
-        history_filtered_tickers = history_counts[history_counts >= MIN_MONTHS].index.tolist()
-        logger_setup.logger.info(f"History filtering complete. {len(liquid_tickers)} tickers -> {len(history_filtered_tickers)} tickers.")
+        history_filtered_permnos = history_counts[history_counts >= MIN_MONTHS].index.tolist()
+        logger_setup.logger.info(f"History filtering complete. {len(liquid_permnos)} permnos -> {len(history_filtered_permnos)} permnos.")
         
-        initial_universe = history_filtered_tickers
+        initial_universe_permnos = history_filtered_permnos
 
     # 3. Pass all data and settings to the backtester and run
     ff_df_from_backtest = backtester.run_backtest(
@@ -56,14 +56,12 @@ if __name__ == '__main__':
         monthly_df=monthly_df,
         vix_df=vix_df,
         ff_df=ff_df,
-        all_tickers=initial_universe, # Pass the final filtered universe
+        all_permnos=initial_universe_permnos, # Pass the final filtered universe
         start_year=config.START_YEAR,
         end_year=config.END_YEAR,
         etf_costs=config.ETF_COSTS,
-        asset_groups=config.ASSET_GROUPS,
-        group_constraints=config.GROUP_CONSTRAINTS,
         model_params=config.MODEL_PARAMS,
-        benchmark_tickers=config.BENCHMARK_TICKERS,
+        benchmark_permnos=config.BENCHMARK_PERMNOS,
         use_etf_ranking=args.ranking,
         top_n=config.TOP_N_ETFS,
         run_rolling_tune=args.tune,

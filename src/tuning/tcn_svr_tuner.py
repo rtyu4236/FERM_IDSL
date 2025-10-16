@@ -87,10 +87,12 @@ class TCN_SVR_Objective:
         )
         model.optimizer = torch.optim.Adam(model.net.parameters(), lr=tcn_lr)
 
+        logger.info(f"[TCN_SVR_Objective] Starting model.fit() for trial {trial.number} with permno {target_ticker}.")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
                   epochs=tcn_epochs,
                   patience=self.config_model_params['tcn_svr_params']['early_stopping_patience'],
                   min_delta=self.config_model_params['tcn_svr_params']['early_stopping_min_delta'])
+        logger.info(f"[TCN_SVR_Objective] model.fit() completed for trial {trial.number} with permno {target_ticker}.")
         
         final_val_loss = model.best_loss
         return final_val_loss
@@ -100,7 +102,7 @@ def run_tuning(full_feature_df, n_trials=50, end_date=None):
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=n_trials, n_jobs=-1)
+    study.optimize(objective, n_trials=n_trials, n_jobs=1)
 
     logger.info("Tuning finished.")
     logger.info(f"Best trial for period ending {end_date}:")

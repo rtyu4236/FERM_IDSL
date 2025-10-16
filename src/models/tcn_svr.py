@@ -19,7 +19,7 @@ class TCN_SVR_Model:
     from time-series data and a Support Vector Regression (SVR) for final prediction.
 
     The TCN part is a PyTorch model that learns to predict future technical indicators.
-    The SVR part is a scikit-learn model that takes the TCN's predicted indicators as input
+    The SVR part is a scikit-learn model that takes the TCN\'s predicted indicators as input
     to predict the final return.
     """
     def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale'):
@@ -82,12 +82,17 @@ class TCN_SVR_Model:
 
         # 1. Train the TCN model
         for epoch in range(epochs):
+            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs} - Starting TCN training step.")
             self.net.train()
             self.optimizer.zero_grad()
+            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Before TCN forward pass. X_train_tcn shape={X_train_tcn.shape}")
             output = self.net(X_train_tcn.permute(0, 2, 1))
+            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - After TCN forward pass. Output shape={output.shape}")
             loss = self.criterion(output, y_train_tcn)
+            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Loss calculated: {loss.item():.4f}")
             loss.backward()
             self.optimizer.step()
+            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Optimizer step completed.")
 
             if can_validate:
                 self.net.eval()
