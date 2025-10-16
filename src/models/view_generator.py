@@ -8,8 +8,8 @@ import traceback
 import torch
 from src.models.tcn_svr import TCN_SVR_Model
 
-def train_volatility_model(ticker, train_df, feature_cols):
-    logger.info(f"[train_volatility_model] Function entry. Ticker: {ticker}")
+def train_volatility_model(permno, train_df, feature_cols):
+    logger.info(f"[train_volatility_model] Function entry. PERMNO: {permno}")
     logger.info(f"[train_volatility_model] Input: train_df shape={train_df.shape}, feature_cols len={len(feature_cols)}")
     y_train = train_df['realized_vol'].values
     X_train = train_df[feature_cols].values
@@ -30,9 +30,9 @@ def train_volatility_model(ticker, train_df, feature_cols):
     logger.info("[train_volatility_model] Function exit.")
     return model
 
-def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, benchmark_ticker, view_outperformance):
+def generate_ml_views(analysis_date, permnos, full_feature_df, Sigma, tau, benchmark_permno, view_outperformance):
     logger.info("[generate_ml_views] Function entry.")
-    logger.info(f"[generate_ml_views] Input: analysis_date={analysis_date}, tickers len={len(tickers)}, full_feature_df shape={full_feature_df.shape}, Sigma shape={Sigma.shape}, tau={tau}, benchmark_ticker={benchmark_ticker}, view_outperformance={view_outperformance}")
+    logger.info(f"[generate_ml_views] Input: analysis_date={analysis_date}, permnos len={len(permnos)}, full_feature_df shape={full_feature_df.shape}, Sigma shape={Sigma.shape}, tau={tau}, benchmark_permno={benchmark_permno}, view_outperformance={view_outperformance}")
     
     train_df = full_feature_df[full_feature_df['date'] < analysis_date]
     features_for_prediction = full_feature_df[full_feature_df['date'] == analysis_date]
@@ -46,19 +46,19 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
     predictions = {}
     residual_variances = {}
     
-    for ticker in tickers:
-        logger.info(f"[generate_ml_views] Processing ticker: {ticker}")
-        ticker_train_df = train_df[train_df['ticker'] == ticker].set_index('date')
-        ticker_features = features_for_prediction[features_for_prediction['ticker'] == ticker]
-        logger.info(f"[generate_ml_views] Ticker {ticker}: ticker_train_df shape={ticker_train_df.shape}, ticker_features shape={ticker_features.shape}")
+    for permno in permnos:
+        logger.info(f"[generate_ml_views] Processing permno: {permno}")
+        permno_train_df = train_df[train_df['permno'] == permno].set_index('date')
+        permno_features = features_for_prediction[features_for_prediction['permno'] == permno]
+        logger.info(f"[generate_ml_views] PERMNO {permno}: permno_train_df shape={permno_train_df.shape}, permno_features shape={permno_features.shape}")
         
         MIN_TRAIN_SAMPLES = 15
-        if len(ticker_train_df) < MIN_TRAIN_SAMPLES:
-            logger.warning(f"Skipping {ticker} due to insufficient training data: {len(ticker_train_df)} samples < {MIN_TRAIN_SAMPLES}")
+        if len(permno_train_df) < MIN_TRAIN_SAMPLES:
+            logger.warning(f"Skipping {permno} due to insufficient training data: {len(permno_train_df)} samples < {MIN_TRAIN_SAMPLES}")
             continue
 
-        if ticker_train_df.empty or ticker_features.empty:
-            logger.warning(f"[generate_ml_views] Ticker {ticker}: Empty train_df or features_for_prediction, skipping.")
+        if permno_train_df.empty or permno_features.empty:
+            logger.warning(f"[generate_ml_views] PERMNO {permno}: Empty train_df or features_for_prediction, skipping.")
             continue
 
         try:
@@ -66,43 +66,43 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
                 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
                 'Mkt-RF', 'SMB', 'HML', 'RF'
             ]
-            lag_features = [col for col in ticker_train_df.columns if '_lag_' in col]
+            lag_features = [col for col in permno_train_df.columns if '_lag_' in col]
             arima_features = original_features + lag_features
-            arima_features = [f for f in arima_features if f in ticker_train_df.columns]
-            logger.info(f"[generate_ml_views] Ticker {ticker}: ARIMAX features len={len(arima_features)}: {arima_features}")
+            arima_features = [f for f in arima_features if f in permno_train_df.columns]
+            logger.info(f"[generate_ml_views] PERMNO {permno}: ARIMAX features len={len(arima_features)}: {arima_features}")
 
-            model = train_volatility_model(ticker, ticker_train_df, arima_features)
+            model = train_volatility_model(permno, permno_train_df, arima_features)
             
-            X_pred_df = ticker_features[arima_features]
-            logger.info(f"[generate_ml_views] Ticker {ticker}: X_pred_df shape={X_pred_df.shape}")
+            X_pred_df = permno_features[arima_features]
+            logger.info(f"[generate_ml_views] PERMNO {permno}: X_pred_df shape={X_pred_df.shape}")
 
             X_pred = np.array(X_pred_df)
             if X_pred.ndim == 1:
                 X_pred = X_pred.reshape(-1, 1)
-            logger.info(f"[generate_ml_views] Ticker {ticker}: X_pred shape={X_pred.shape}")
+            logger.info(f"[generate_ml_views] PERMNO {permno}: X_pred shape={X_pred.shape}")
 
             prediction_result = model.predict(n_periods=1, X=X_pred)
             if isinstance(prediction_result, pd.Series):
                 pred_vol = prediction_result.iloc[0]
             else:
                 pred_vol = prediction_result[0]
-            logger.info(f"[generate_ml_views] Ticker {ticker}: Predicted volatility={pred_vol:.4f}")
+            logger.info(f"[generate_ml_views] PERMNO {permno}: Predicted volatility={pred_vol:.4f}")
             
-            predictions[ticker] = pred_vol
+            predictions[permno] = pred_vol
             
-            residual_variances[ticker] = np.var(model.resid())
+            residual_variances[permno] = np.var(model.resid())
         except Exception as e:
-            logger.error(f"[generate_ml_views] Ticker {ticker}: ERROR processing ticker: {e}")
-            logger.error(f"[generate_ml_views] Ticker {ticker}: Traceback: {traceback.format_exc()}")
+            logger.error(f"[generate_ml_views] PERMNO {permno}: ERROR processing permno: {e}")
+            logger.error(f"[generate_ml_views] PERMNO {permno}: Traceback: {traceback.format_exc()}")
             continue
 
-    if benchmark_ticker not in predictions:
-        logger.warning(f"No prediction for benchmark ticker {benchmark_ticker}, cannot generate views.")
+    if benchmark_permno not in predictions:
+        logger.warning(f"No prediction for benchmark permno {benchmark_permno}, cannot generate views.")
         logger.info("[generate_ml_views] Function exit (no benchmark prediction).")
         return np.array([]), np.array([]), np.array([])
 
     sorted_predictions = sorted(predictions.items(), key=lambda item: item[1])
-    non_benchmark_predictions = [p for p in sorted_predictions if p[0] != benchmark_ticker]
+    non_benchmark_predictions = [p for p in sorted_predictions if p[0] != benchmark_permno]
     logger.info(f"[generate_ml_views] Sorted predictions len={len(sorted_predictions)}, non_benchmark_predictions len={len(non_benchmark_predictions)}")
 
     if not non_benchmark_predictions:
@@ -110,23 +110,23 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
         logger.info("[generate_ml_views] Function exit (no non-benchmark predictions).")
         return np.array([]), np.array([]), np.array([])
 
-    best_performer_ticker, best_performer_vol = non_benchmark_predictions[0]
-    worst_performer_ticker, worst_performer_vol = non_benchmark_predictions[-1]
-    benchmark_vol = predictions[benchmark_ticker]
-    logger.info(f"[generate_ml_views] Best performer: {best_performer_ticker} ({best_performer_vol:.4f}), Worst performer: {worst_performer_ticker} ({worst_performer_vol:.4f}), Benchmark vol: {benchmark_vol:.4f}")
+    best_performer_permno, best_performer_vol = non_benchmark_predictions[0]
+    worst_performer_permno, worst_performer_vol = non_benchmark_predictions[-1]
+    benchmark_vol = predictions[benchmark_permno]
+    logger.info(f"[generate_ml_views] Best performer: {best_performer_permno} ({best_performer_vol:.4f}), Worst performer: {worst_performer_permno} ({worst_performer_vol:.4f}), Benchmark vol: {benchmark_vol:.4f}")
 
     view_definitions = []
     if best_performer_vol < benchmark_vol:
         view_definitions.append({
-            'winner': best_performer_ticker,
-            'loser': benchmark_ticker,
+            'winner': best_performer_permno,
+            'loser': benchmark_permno,
             'confidence': view_outperformance
         })
 
     if worst_performer_vol > benchmark_vol:
         view_definitions.append({
-            'winner': benchmark_ticker,
-            'loser': worst_performer_ticker,
+            'winner': benchmark_permno,
+            'loser': worst_performer_permno,
             'confidence': view_outperformance
         })
     logger.info(f"[generate_ml_views] View definitions len={len(view_definitions)}")
@@ -137,7 +137,7 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
         return np.array([]), np.array([]), np.array([])
 
     num_views = len(view_definitions)
-    num_assets = len(tickers)
+    num_assets = len(permnos)
     
     P = np.zeros((num_views, num_assets))
     Q = np.zeros((num_views, 1))
@@ -145,16 +145,16 @@ def generate_ml_views(analysis_date, tickers, full_feature_df, Sigma, tau, bench
     
     temp_P = P.copy()
     for i, view in enumerate(view_definitions):
-        winner_idx = tickers.index(view['winner'])
-        loser_idx = tickers.index(view['loser'])
+        winner_idx = permnos.index(view['winner'])
+        loser_idx = permnos.index(view['loser'])
         temp_P[i, winner_idx] = 1
         temp_P[i, loser_idx] = -1
     omega_diag_vector = np.diag(temp_P @ (tau * Sigma) @ temp_P.T).copy()
     logger.info(f"[generate_ml_views] omega_diag_vector shape={omega_diag_vector.shape}")
 
     for i, view in enumerate(view_definitions):
-        winner_idx = tickers.index(view['winner'])
-        loser_idx = tickers.index(view['loser'])
+        winner_idx = permnos.index(view['winner'])
+        loser_idx = permnos.index(view['loser'])
         P[i, winner_idx] = 1
         P[i, loser_idx] = -1
         Q[i] = view['confidence']
@@ -186,11 +186,11 @@ def _create_sequences(data, lookback_window):
     logger.info("[_create_sequences] Function exit.")
     return np.array(xs), np.array(ys)
 
-def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params):
+def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params):
     logger.info("[generate_tcn_svr_views] Function entry.")
-    logger.info(f"[generate_tcn_svr_views] Input: analysis_date={analysis_date}, tickers len={len(tickers)}, full_feature_df shape={full_feature_df.shape}, model_params={model_params}")
+    logger.info(f"[generate_tcn_svr_views] Input: analysis_date={analysis_date}, permnos len={len(permnos)}, full_feature_df shape={full_feature_df.shape}, model_params={model_params}")
     
-    num_assets = len(tickers)
+    num_assets = len(permnos)
     predicted_returns = np.zeros(num_assets)
     model_errors = np.zeros(num_assets) # Placeholder for future implementation
 
@@ -200,37 +200,37 @@ def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params
     all_features = indicator_features + other_features + lag_features
     logger.info(f"[generate_tcn_svr_views] Defined features: indicator_features len={len(indicator_features)}, other_features len={len(other_features)}, lag_features len={len(lag_features)}, all_features len={len(all_features)}")
 
-    for i, ticker in enumerate(tickers):
-        logger.info(f"[generate_tcn_svr_views] Processing ticker: {ticker}")
-        ticker_df = full_feature_df[full_feature_df['ticker'] == ticker].copy()
-        ticker_df = ticker_df.dropna(subset=all_features + ['target_return'])
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: ticker_df shape={ticker_df.shape}, columns={ticker_df.columns.tolist()}")
+    for i, permno in enumerate(permnos):
+        logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
+        permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
+        permno_df = permno_df.dropna(subset=all_features + ['target_return'])
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df shape={permno_df.shape}, columns={permno_df.columns.tolist()}")
         
-        if len(ticker_df) < model_params['lookback_window'] + 1:
-            logger.warning(f"Skipping view generation for {ticker} due to insufficient data. (Data count: {len(ticker_df)}, lookback: {model_params['lookback_window']})")
+        if len(permno_df) < model_params['lookback_window'] + 1:
+            logger.warning(f"Skipping view generation for {permno} due to insufficient data. (Data count: {len(permno_df)}, lookback: {model_params['lookback_window']})")
             predicted_returns[i] = 0
             continue
 
-        X_data = ticker_df[all_features].values
-        y_indicators = ticker_df[indicator_features].values
-        y_returns = ticker_df['target_return'].values
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
+        X_data = permno_df[all_features].values
+        y_indicators = permno_df[indicator_features].values
+        y_returns = permno_df['target_return'].values
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
 
         X_seq, y_seq_combined = _create_sequences(np.hstack([X_data, y_indicators, y_returns.reshape(-1,1)]), model_params['lookback_window'])
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_seq shape={X_seq.shape}, y_seq_combined shape={y_seq_combined.shape}")
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_seq shape={X_seq.shape}, y_seq_combined shape={y_seq_combined.shape}")
         
         X_train_seq = X_seq[:, :, :-len(indicator_features)-1]
         y_train_indicators_seq = y_seq_combined[:, -len(indicator_features)-1:-1]
         y_train_returns_seq = y_seq_combined[:, -1]
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_train_seq shape={X_train_seq.shape}, y_train_indicators_seq shape={y_train_indicators_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_seq shape={X_train_seq.shape}, y_train_indicators_seq shape={y_train_indicators_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
 
         X_test_seq = np.array([X_data[-model_params['lookback_window']:]])
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_test_seq shape={X_test_seq.shape}")
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_test_seq shape={X_test_seq.shape}")
 
         X_train_tensor = torch.from_numpy(X_train_seq).float()
         y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
         X_test_tensor = torch.from_numpy(X_test_seq).float()
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: X_train_tensor shape={X_train_tensor.shape}, y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, X_test_tensor shape={X_test_tensor.shape}")
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_tensor shape={X_train_tensor.shape}, y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, X_test_tensor shape={X_test_tensor.shape}")
 
         model = TCN_SVR_Model(
             input_size=len(all_features),
@@ -242,16 +242,16 @@ def generate_tcn_svr_views(analysis_date, tickers, full_feature_df, model_params
             svr_C=model_params.get('svr_C', 1.0),
             svr_gamma=model_params.get('svr_gamma', 'scale')
         )
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
                   epochs=model_params.get('epochs', 50),
                   patience=model_params.get('early_stopping_patience', 10),
                   min_delta=model_params.get('early_stopping_min_delta', 0.0001))
-        logger.info(f"[generate_tcn_svr_views] Ticker {ticker}: TCN_SVR_Model fitted.")
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model fitted.")
         
         prediction = model.predict(X_test_tensor)
         predicted_returns[i] = prediction[0]
-        logger.info(f"Predicted return for {ticker}: {prediction[0]:.4f}")
+        logger.info(f"Predicted return for {permno}: {prediction[0]:.4f}")
 
     P = np.identity(num_assets)
     Q = predicted_returns.reshape(-1, 1)

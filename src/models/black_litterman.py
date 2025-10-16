@@ -8,10 +8,10 @@ from src.utils.logger import logger
 solvers.options['show_progress'] = False
 warnings.filterwarnings('ignore', category=UserWarning)
 
-def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker='SPY'):
+def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno=84398):
     logger.info("[_calculate_long_term_delta] Function entry.")
-    logger.info(f"[_calculate_long_term_delta] Input: all_returns_df shape={all_returns_df.shape}, ff_df shape={ff_df.shape}, market_proxy_ticker={market_proxy_ticker}")
-    market_returns = all_returns_df[all_returns_df['ticker'] == market_proxy_ticker].set_index('date')['retx']
+    logger.info(f"[_calculate_long_term_delta] Input: all_returns_df shape={all_returns_df.shape}, ff_df shape={ff_df.shape}, market_proxy_permno={market_proxy_permno}")
+    market_returns = all_returns_df[all_returns_df['permno'] == market_proxy_permno].set_index('date')['total_return']
     ff_series = ff_df.set_index('date')['RF']
     logger.info(f"[_calculate_long_term_delta] market_returns shape={market_returns.shape}, ff_series shape={ff_series.shape}")
     aligned_market, aligned_rf = market_returns.align(ff_series, join='inner')
@@ -43,18 +43,16 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker='SPY')
     return long_term_delta
 
 class BlackLittermanPortfolio:
-    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_ticker, asset_groups, group_constraints):
+    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_permno):
         logger.info("[BlackLittermanPortfolio.__init__] Function entry.")
-        logger.info(f"[BlackLittermanPortfolio.__init__] Input: all_returns_df shape={all_returns_df.shape}, ff_df shape={ff_df.shape}, lookback_months={lookback_months}, tau={tau}, market_proxy_ticker={market_proxy_ticker}")
+        logger.info(f"[BlackLittermanPortfolio.__init__] Input: all_returns_df shape={all_returns_df.shape}, ff_df shape={ff_df.shape}, lookback_months={lookback_months}, tau={tau}, market_proxy_permno={market_proxy_permno}")
         self.all_returns_df = all_returns_df
         self.ff_df = ff_df
         self.expense_ratios = expense_ratios
         self.lookback_months = lookback_months
         self.tau = tau
-        self.market_proxy_ticker = market_proxy_ticker
-        self.asset_groups = asset_groups
-        self.group_constraints = group_constraints
-        self.default_delta = _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_ticker)
+        self.market_proxy_permno = market_proxy_permno
+        self.default_delta = _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno)
         logger.info(f"[BlackLittermanPortfolio.__init__] default_delta={self.default_delta}")
         logger.info("[BlackLittermanPortfolio.__init__] Function exit.")
 
@@ -67,16 +65,16 @@ class BlackLittermanPortfolio:
             (self.all_returns_df['date'] <= analysis_date)
         ]
         logger.info(f"[BlackLittermanPortfolio._get_current_universe] recent_data shape={recent_data.shape}")
-        ticker_counts = recent_data.groupby('ticker')['date'].nunique()
-        valid_tickers = ticker_counts[ticker_counts >= self.lookback_months].index.tolist()
-        logger.info(f"[BlackLittermanPortfolio._get_current_universe] valid_tickers count={len(valid_tickers)}")
-        current_returns_df = recent_data[recent_data['ticker'].isin(valid_tickers)]
+        permno_counts = recent_data.groupby('permno')['date'].nunique()
+        valid_permnos = permno_counts[permno_counts >= self.lookback_months].index.tolist()
+        logger.info(f"[BlackLittermanPortfolio._get_current_universe] valid_permnos count={len(valid_permnos)}")
+        current_returns_df = recent_data[recent_data['permno'].isin(valid_permnos)]
         returns_pivot = current_returns_df.pivot_table(
-            index='date', columns='ticker', values='retx'
+            index='date', columns='permno', values='total_return'
         ).fillna(0)
         logger.info(f"[BlackLittermanPortfolio._get_current_universe] returns_pivot shape={returns_pivot.shape}")
         logger.info("[BlackLittermanPortfolio._get_current_universe] Function exit.")
-        return sorted(valid_tickers), returns_pivot
+        return sorted(valid_permnos), returns_pivot
 
     def _calculate_inputs(self, returns_pivot, analysis_date):
         logger.info("[BlackLittermanPortfolio._calculate_inputs] Function entry.")
@@ -88,7 +86,7 @@ class BlackLittermanPortfolio:
 
         if np.trace(Sigma) < 1e-8:
             logger.warning("Covariance matrix is close to zero, optimization not possible.")
-            logger.info("[BlackLittermanPortfolio._calculate_inputs] Function exit (Sigma invalid).")
+            logger.info("[BlackLittermanPortfolio._calculate_inputs] Function exit (Sigma is None).")
             return None, None, None
 
         eigvals, eigvecs = np.linalg.eigh(Sigma)
@@ -102,8 +100,8 @@ class BlackLittermanPortfolio:
         ]
         logger.info(f"[BlackLittermanPortfolio._calculate_inputs] relevant_ff shape={relevant_ff.shape}")
         
-        if self.market_proxy_ticker in returns_pivot.columns and not relevant_ff.empty:
-            market_returns = returns_pivot[self.market_proxy_ticker]
+        if self.market_proxy_permno in returns_pivot.columns and not relevant_ff.empty:
+            market_returns = returns_pivot[self.market_proxy_permno]
             ff_series = relevant_ff.set_index('date')['RF']
             aligned_market, aligned_rf = market_returns.align(ff_series, join='inner')
             logger.info(f"[BlackLittermanPortfolio._calculate_inputs] aligned_market shape={aligned_market.shape}")
@@ -138,8 +136,8 @@ class BlackLittermanPortfolio:
     def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None):
         logger.info("[BlackLittermanPortfolio.get_black_litterman_portfolio] Function entry.")
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Input: analysis_date={analysis_date}, P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
-        current_tickers, returns_pivot = self._get_current_universe(analysis_date)
-        logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] current_tickers count={len(current_tickers)}, returns_pivot shape={returns_pivot.shape}")
+        current_permnos, returns_pivot = self._get_current_universe(analysis_date)
+        logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] current_permnos count={len(current_permnos)}, returns_pivot shape={returns_pivot.shape}")
 
         if pre_calculated_inputs:
             Sigma, delta, W_mkt = pre_calculated_inputs
@@ -149,10 +147,10 @@ class BlackLittermanPortfolio:
             logger.info("[BlackLittermanPortfolio.get_black_litterman_portfolio] Calculated inputs.")
         
         if Sigma is None:
-            weights = np.ones(len(current_tickers)) / len(current_tickers)
+            weights = np.ones(len(current_permnos)) / len(current_permnos)
             logger.warning("[BlackLittermanPortfolio.get_black_litterman_portfolio] Sigma is None, returning equal weights.")
             logger.info("[BlackLittermanPortfolio.get_black_litterman_portfolio] Function exit (Sigma is None).")
-            return pd.Series(weights, index=current_tickers), None
+            return pd.Series(weights, index=current_permnos), None
         
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Sigma shape={Sigma.shape}, W_mkt shape={W_mkt.shape}")
 
@@ -184,9 +182,9 @@ class BlackLittermanPortfolio:
             mu_bl = Pi
             logger.info("No ML views provided, using equilibrium returns.")
             
-        expenses = np.array([self.expense_ratios.get(ticker, 0) for ticker in current_tickers])
+        expenses = np.array([self.expense_ratios.get(permno, 0) for permno in current_permnos])
         mu_bl_net = mu_bl - expenses
-        n = len(current_tickers)
+        n = len(current_permnos)
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] mu_bl_net shape={mu_bl_net.shape}, n={n}")
 
         use_turnover = config.USE_TURNOVER_CONSTRAINT and previous_weights is not None and not previous_weights.empty
@@ -197,7 +195,7 @@ class BlackLittermanPortfolio:
             q_opt = matrix(np.hstack([-mu_bl_net, np.zeros(n)]))
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] P_opt shape={P_opt.size}, q_opt shape={q_opt.size}")
 
-            w_old, _ = previous_weights.align(pd.Series(index=current_tickers), join='right', fill_value=0)
+            w_old, _ = previous_weights.align(pd.Series(index=current_permnos), join='right', fill_value=0)
             w_old = w_old.values
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] w_old shape={w_old.shape}")
 
@@ -210,15 +208,6 @@ class BlackLittermanPortfolio:
             h_list.append(np.hstack([w_old, -w_old]))
             G_list.append(np.hstack([np.zeros(n), np.ones(n)]))
             h_list.append(config.MAX_TURNOVER)
-            
-            for group_name, constraints in self.group_constraints.items():
-                group_tickers = self.asset_groups.get(group_name, [])
-                group_row = np.array([1.0 if ticker in group_tickers else 0.0 for ticker in current_tickers])
-                if group_row.sum() > 0:
-                    G_list.append(np.hstack([group_row, np.zeros(n)]))
-                    h_list.append(constraints['max'])
-                    G_list.append(np.hstack([-group_row, np.zeros(n)]))
-                    h_list.append(-constraints['min'])
 
             G = matrix(np.vstack(G_list))
             h = matrix(np.hstack(h_list))
@@ -233,25 +222,8 @@ class BlackLittermanPortfolio:
             q_opt = matrix(-mu_bl_net)
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] P_opt shape={P_opt.size}, q_opt shape={q_opt.size}")
             
-            G_individual = np.vstack([-np.identity(n), np.identity(n)])
-            h_individual = np.hstack([np.zeros(n), np.full(n, max_weight)])
-            
-            group_G_rows, group_h_rows = [], []
-            for group_name, constraints in self.group_constraints.items():
-                group_tickers = self.asset_groups.get(group_name, [])
-                group_row = np.array([1.0 if ticker in group_tickers else 0.0 for ticker in current_tickers])
-                if group_row.sum() > 0:
-                    group_G_rows.append(group_row)
-                    group_h_rows.append(constraints['max'])
-                    group_G_rows.append(-group_row)
-                    group_h_rows.append(-constraints['min'])
-
-            if group_G_rows:
-                G = matrix(np.vstack([G_individual, np.vstack(group_G_rows)]))
-                h = matrix(np.hstack([h_individual, np.array(group_h_rows)]))
-            else:
-                G = matrix(G_individual)
-                h = matrix(h_individual)
+            G = matrix(np.vstack([-np.identity(n), np.identity(n)]))
+            h = matrix(np.hstack([np.zeros(n), np.full(n, max_weight)]))
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] G shape={G.size}, h shape={h.size}")
 
             A = matrix(1.0, (1, n))
@@ -269,7 +241,7 @@ class BlackLittermanPortfolio:
 
         weights[weights < 1e-5] = 0
         weights /= weights.sum()
-        portfolio = pd.Series(weights, index=current_tickers)
+        portfolio = pd.Series(weights, index=current_permnos)
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Final portfolio weights shape={portfolio.shape}")
         
         logger.info("Portfolio construction complete.")

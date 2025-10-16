@@ -31,7 +31,7 @@ except FileNotFoundError:
 MODEL_PARAMS = {
     # Common Parameters
     'max_weight': 0.7,
-    'market_proxy_ticker': 'SPY',
+    'market_proxy_permno': 84398,  # SPY
 
     # ARIMAX Model Parameters
     'use_arima': False,
@@ -50,7 +50,7 @@ MODEL_PARAMS = {
         'kernel_size': 3,
         'dropout': 0.2,
         'base_uncertainty': 0.05,
-        'epochs': 50, # Default epochs
+        'epochs': 50,  # Default epochs
         'early_stopping_patience': 10,
         'early_stopping_min_delta': 0.0001
     }
@@ -66,33 +66,13 @@ STATIONARITY_SIGNIFICANCE_LEVEL = 0.05
 # Dynamic Omega (Ω) Calculation Settings
 USE_DYNAMIC_OMEGA = True
 
-# Asset Groups and Constraints Settings
-ASSET_GROUPS = {
-    'US_EQUITY': ['SPY', 'QQQ', 'QQQQ', 'IWM', 'VTI', 'MDY', 'DIA', 'RSP', 'VTV', 'VUG', 'MTUM', 'QUAL', 'USMV', 'SCHD'],
-    'US_SECTOR': ['XLK', 'XLV', 'XLE', 'XLF', 'XLI', 'XLP'],
-    'INTL_EQUITY': ['VEA', 'VWO', 'EWJ', 'VGK'],
-    'FIXED_INCOME': ['AGG', 'TLT', 'TIP', 'HYG'],
-    'COMMODITIES': ['GLD', 'SLV'],
-    'REAL_ESTATE': ['VNQ']
-}
-
-GROUP_CONSTRAINTS = {
-    # Group Name: {'min': min_weight, 'max': max_weight}
-    'US_EQUITY': {'min': 0.10, 'max': 0.70},
-    'US_SECTOR': {'min': 0.00, 'max': 0.50},
-    'INTL_EQUITY': {'min': 0.00, 'max': 0.40},
-    'FIXED_INCOME': {'min': 0.10, 'max': 0.60},
-    'COMMODITIES': {'min': 0.00, 'max': 0.4},
-    'REAL_ESTATE': {'min': 0.00, 'max': 0.4},
-}
-
 # If True, constrains the portfolio's monthly turnover to be below MAX_TURNOVER
 USE_TURNOVER_CONSTRAINT = False
 MAX_TURNOVER = 0.40
 
 # Benchmark list settings for comparative analysis
 # None represents a 1/N portfolio (equal weight on all assets) benchmark
-BENCHMARK_TICKERS = ['SPY', 'QQQ', None]
+BENCHMARK_PERMNOS = [84398, 88320, None]  # SPY, QQQ
 
 def get_model_params(use_tuned_params=True):
     """
