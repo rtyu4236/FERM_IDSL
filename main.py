@@ -51,7 +51,7 @@ if __name__ == '__main__':
         initial_universe_permnos = history_filtered_permnos
 
     # 3. Pass all data and settings to the backtester and run
-    ff_df_from_backtest = backtester.run_backtest(
+    ff_df_from_backtest, avg_turnover = backtester.run_backtest(
         daily_df=daily_df,
         monthly_df=monthly_df,
         vix_df=vix_df,
@@ -75,7 +75,8 @@ if __name__ == '__main__':
         cumulative_returns_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
         cumulative_df = pd.read_csv(cumulative_returns_path, index_col=0, parse_dates=True)
         from src.visualization.plot import run_visualization
-        run_visualization(cumulative_df, ff_df_from_backtest)
+        avg_turnover_dict = {'BL_ML_Strategy': avg_turnover}
+        run_visualization(cumulative_df, ff_df_from_backtest, avg_turnover_dict)
     except FileNotFoundError:
         logger_setup.logger.error(f"Visualization error: 'cumulative_returns.csv' file not found.")
     except Exception as e:

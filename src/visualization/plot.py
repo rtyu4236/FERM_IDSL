@@ -8,6 +8,7 @@ from src.data_processing import manager as data_manager
 from src.utils.logger import logger
 import matplotlib.pyplot as plt
 import traceback
+import scipy.stats
 
 OUTPUT_DIR = config.OUTPUT_DIR
 
@@ -42,6 +43,141 @@ def _calculate_returns_from_cumulative(cumulative_returns):
     logger.info(f"[_calculate_returns_from_cumulative] Output returns shape={returns.shape}")
     logger.info("[_calculate_returns_from_cumulative] Function exit.")
     return returns
+
+def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
+    """전략별 상세 성과 요약표 (논문의 Table 2 형식) 생성 (완전판)."""
+    logger.info("상세 전략 성과 요약표 생성을 시작합니다.")
+
+    # --- 패널 (a): 월별 수익률 상세 통계 ---
+    panel_a_data = {}
+    for col in returns_df.columns:
+        series = returns_df[col].dropna()
+        if series.empty: continue
+        t_stat, _ = scipy.stats.ttest_1samp(series, 0)
+        stats = {
+            'Mean': series.mean(),
+            'Standard deviation': series.std(),
+            'Standard error': scipy.stats.sem(series),
+            't-statistic': t_stat,
+            'Min': series.min(),
+            '25%': series.quantile(0.25),
+            '50%': series.quantile(0.50),
+            '75%': series.quantile(0.75),
+            'Max': series.max(),
+            'Skew': scipy.stats.skew(series),
+            'Kurtosis': scipy.stats.kurtosis(series),
+        }
+        panel_a_data[col] = stats
+    if panel_a_data:
+        panel_a_df = pd.DataFrame(panel_a_data)
+        ordered_index_a = [
+            'Mean', 'Standard deviation', 'Standard error', 't-statistic', 'Min',
+            '25%', '50%', '75%', 'Max', 'Skew', 'Kurtosis'
+        ]
+        panel_a_df = panel_a_df.reindex(ordered_index_a)
+        _save_df_as_image(panel_a_df, 'table_1_monthly_statistics.png')
+
+    # --- 패널 (b): 연환산 리스크-수익 지표 ---
+    panel_b_data = {}
+    for col in returns_df.columns:
+        series = returns_df[col].dropna()
+        if series.empty: continue
+        
+        yearly_comp = series.resample('Y').apply(qs.stats.comp)
+        t_stat, _ = scipy.stats.ttest_1samp(series, 0)
+
+        metrics = {
+            'Mean return': qs.stats.cagr(series),
+            'Standard deviation': qs.stats.volatility(series),
+            'Sharpe ratio': qs.stats.sharpe(series),
+            't-statistic': t_stat,
+            'Downside deviation': qs.stats.downside_risk(series),
+            'Sortino ratio': qs.stats.sortino(series),
+            'Gross profit': series[series > 0].sum(),
+            'Gross loss': series[series < 0].sum(),
+            'Profit factor': qs.stats.profit_factor(series),
+            'Profitable years': (yearly_comp > 0).sum(),
+            'Unprofitable years': (yearly_comp <= 0).sum(),
+            'Maximum drawdown': qs.stats.max_drawdown(series),
+            'Calmar ratio': qs.stats.calmar(series),
+            'Turnover': avg_turnover_dict.get(col, np.nan) 
+        }
+        panel_b_data[col] = metrics
+    
+    if panel_b_data:
+        panel_b_df = pd.DataFrame(panel_b_data)
+        ordered_index_b = [
+            'Mean return', 'Standard deviation', 'Sharpe ratio', 't-statistic',
+            'Downside deviation', 'Sortino ratio', 'Gross profit', 'Gross loss',
+            'Profit factor', 'Profitable years', 'Unprofitable years', 
+            'Maximum drawdown', 'Calmar ratio', 'Turnover'
+        ]
+        panel_b_df = panel_b_df.reindex(ordered_index_b)
+        _save_df_as_image(panel_b_df, 'table_2_annualized_risk_metrics.png')
+
+def generate_sub_period_analysis(returns_df):
+    """기간별 성과 분석표 (논문의 Table 6 형식) 생성."""
+    logger.info("기간별 성과 분석표 생성을 시작합니다.")
+    if returns_df.empty:
+        logger.warning("기간별 성과 분석을 위한 데이터가 없습니다.")
+        return
+
+    backtest_start_date = returns_df.index.min()
+    backtest_end_date = returns_df.index.max()
+
+    potential_periods = {
+        '01/1980 - 12/1999': (pd.to_datetime('1980-01-01'), pd.to_datetime('1999-12-31')),
+        '01/2000 - 12/2006': (pd.to_datetime('2000-01-01'), pd.to_datetime('2006-12-31')),
+        '01/2007 - 12/2009': (pd.to_datetime('2007-01-01'), pd.to_datetime('2009-12-31')),
+        '01/2010 - 12/2019': (pd.to_datetime('2010-01-01'), pd.to_datetime('2019-12-31')),
+        '01/2020 - 12/2020': (pd.to_datetime('2020-01-01'), pd.to_datetime('2020-12-31'))
+    }
+
+    periods_to_analyze = {}
+    for name, (period_start, period_end) in potential_periods.items():
+        # Check for overlap
+        if period_start <= backtest_end_date and period_end >= backtest_start_date:
+            actual_start = max(period_start, backtest_start_date)
+            actual_end = min(period_end, backtest_end_date)
+            new_name = f"{actual_start.strftime('%m/%Y')} - {actual_end.strftime('%m/%Y')}"
+            periods_to_analyze[new_name] = (actual_start, actual_end)
+
+    if not periods_to_analyze:
+        logger.warning("백테스트 기간과 겹치는 분석 대상 기간이 없습니다.")
+        return
+
+    metrics_to_calc = {
+        'Mean return': qs.stats.cagr,
+        'Sharpe ratio': qs.stats.sharpe,
+        'Sortino ratio': qs.stats.sortino,
+        'Profit factor': qs.stats.profit_factor,
+        'Maximum drawdown': qs.stats.max_drawdown,
+        'Calmar ratio': qs.stats.calmar
+    }
+
+    all_periods_data = []
+
+    for period_name, (start_date, end_date) in periods_to_analyze.items():
+        period_df = returns_df.loc[start_date:end_date]
+        if period_df.empty:
+            continue
+
+        period_results = {}
+        for col in period_df.columns:
+            series = period_df[col].dropna()
+            if series.empty: continue
+            
+            calculated_metrics = {metric_name: func(series) for metric_name, func in metrics_to_calc.items()}
+            period_results[col] = calculated_metrics
+
+        if period_results:
+            period_results_df = pd.DataFrame(period_results)
+            period_results_df.index.name = period_name
+            all_periods_data.append(period_results_df)
+
+    if all_periods_data:
+        final_df = pd.concat(all_periods_data, keys=periods_to_analyze.keys())
+        _save_df_as_image(final_df, 'table_6_sub_period_analysis.png')
 
 def generate_performance_tables(strategy_returns, benchmark_returns):
     logger.info("[generate_performance_tables] Function entry.")
@@ -237,7 +373,7 @@ def plot_monthly_returns_comparison(returns_df):
         logger.error(traceback.format_exc())
     logger.info("[plot_monthly_returns_comparison] Function exit.")
 
-def run_visualization(cumulative_df, ff_df):
+def run_visualization(cumulative_df, ff_df, avg_turnover_dict):
     logger.info("[run_visualization] Function entry.")
     logger.info(f"[run_visualization] Input: cumulative_df shape={cumulative_df.shape}, ff_df shape={ff_df.shape}")
     logger.info("Starting visualization and analysis process.")
@@ -250,7 +386,9 @@ def run_visualization(cumulative_df, ff_df):
     strategy_returns = returns_df[strategy_col]
     benchmark_returns = returns_df.drop(columns=[strategy_col])
     logger.info(f"[run_visualization] returns_df shape={returns_df.shape}, strategy_returns shape={strategy_returns.shape}, benchmark_returns shape={benchmark_returns.shape}")
-    generate_performance_tables(strategy_returns, benchmark_returns)
+    # generate_performance_tables(strategy_returns, benchmark_returns)
+    generate_strategy_performance_summary(returns_df, avg_turnover_dict)
+    generate_sub_period_analysis(returns_df)
     generate_factor_analysis_table(strategy_returns, ff_df)
     plot_cumulative_returns(cumulative_df)
     plot_underwater(strategy_returns)
@@ -265,7 +403,9 @@ if __name__ == '__main__':
         cumulative_returns_path = os.path.join(OUTPUT_DIR, 'cumulative_returns.csv')
         cumulative_df = pd.read_csv(cumulative_returns_path, index_col=0, parse_dates=True)
         _, _, _, ff_df, _ = data_manager.load_raw_data()
-        run_visualization(cumulative_df, ff_df)
+        # Dummy data for testing
+        avg_turnover_dict = {'BL_ML_Strategy': 0.15} 
+        run_visualization(cumulative_df, ff_df, avg_turnover_dict)
     except FileNotFoundError:
         logger.error("To run visualizer.py standalone, you must first run the backtest to generate 'cumulative_returns.csv'.")
     except Exception as e:

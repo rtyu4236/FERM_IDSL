@@ -56,12 +56,13 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     backtest_dates_in_range = all_dates_in_df[
         (all_dates_in_df.year >= start_year) & (all_dates_in_df.year <= end_year)
     ]
-    backtest_dates = pd.to_datetime(pd.Series(backtest_dates_in_range).dt.to_period('M').unique().to_timestamp(how='end'))
+    backtest_dates = backtest_dates_in_range.to_period('M').unique().to_timestamp(how='end')
     
     logger.info(f"[run_backtest] Backtest dates range: {backtest_dates.min()} to {backtest_dates.max()}, total {len(backtest_dates)} dates.")
     
     bl_returns = []
     previous_weights = pd.Series(dtype=float)
+    monthly_turnovers = [] # 월별 회전율을 저장할 리스트 추가
 
     for analysis_date in backtest_dates[:-1]:
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
@@ -134,8 +135,14 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
             net_bl_return = raw_bl_return - holding_costs - trade_cost
 
+            turnover = np.abs(aligned_new - aligned_prev).sum() / 2
+            monthly_turnovers.append(turnover)
+
         bl_returns.append(pd.Series([net_bl_return], index=[next_month_date]))
         previous_weights = weights
+
+    avg_turnover = np.mean(monthly_turnovers) if monthly_turnovers else 0
+    logger.info(f"Average Monthly Turnover: {avg_turnover:.2%}")
 
     logger.info("\nGenerating backtest analysis and report.")
     bl_returns_series = pd.concat(bl_returns).sort_index().squeeze().rename("BL_ML_Strategy")
@@ -144,7 +151,10 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     benchmark_returns_dict = {}
     valid_benchmark_permnos = [p for p in filtered_benchmarks if p is not None]
     for permno in valid_benchmark_permnos:
-        permno_returns = monthly_df[monthly_df['permno'] == permno].set_index('date')['total_return']
+        permno_returns_df = monthly_df[monthly_df['permno'] == permno]
+        # 동일 날짜에 중복된 데이터가 있을 경우 첫 번째 값을 사용
+        permno_returns_df = permno_returns_df.drop_duplicates(subset='date', keep='first')
+        permno_returns = permno_returns_df.set_index('date')['total_return']
         benchmark_returns_dict[permno] = permno_returns.rename(permno)
     
     if None in filtered_benchmarks:
@@ -153,6 +163,11 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
     
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})
+
+    logger.info("--- Monthly Returns for All Strategies (results_df) ---")
+    logger.info(results_df.to_string())
+    logger.info("--- End of Monthly Returns ---")
+
     cumulative_results_df = (1 + results_df).cumprod()
     cum_results_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
     cumulative_results_df.to_csv(cum_results_path)
@@ -161,4 +176,4 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     final_returns = cumulative_results_df.iloc[-1] - 1
     logger.info("Final cumulative returns: " + ', '.join([f'{idx} {val:.4f}' for idx, val in final_returns.items()]))
     logger.info("[run_backtest] Function exit.")
-    return ff_df
+    return ff_df, avg_turnover
