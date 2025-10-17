@@ -76,6 +76,16 @@ if __name__ == '__main__':
         cumulative_df = pd.read_csv(cumulative_returns_path, index_col=0, parse_dates=True)
         from src.visualization.plot import run_visualization
         avg_turnover_dict = {'BL_ML_Strategy': avg_turnover}
+
+        logger_setup.logger.info("--- [main.py] Data for Visualization ---")
+        logger_setup.logger.info("1. cumulative_df:")
+        logger_setup.logger.info(cumulative_df.to_string())
+        logger_setup.logger.info("2. ff_df_from_backtest:")
+        logger_setup.logger.info(ff_df_from_backtest.to_string())
+        logger_setup.logger.info("3. avg_turnover_dict:")
+        logger_setup.logger.info(avg_turnover_dict)
+        logger_setup.logger.info("--- End of Data for Visualization ---")
+
         run_visualization(cumulative_df, ff_df_from_backtest, avg_turnover_dict)
     except FileNotFoundError:
         logger_setup.logger.error(f"Visualization error: 'cumulative_returns.csv' file not found.")

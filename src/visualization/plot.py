@@ -46,6 +46,12 @@ def _calculate_returns_from_cumulative(cumulative_returns):
 
 def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
     """전략별 상세 성과 요약표 (논문의 Table 2 형식) 생성 (완전판)."""
+    logger.info("--- [plot.py] Calling generate_strategy_performance_summary ---")
+    logger.info("Input returns_df:")
+    logger.info(returns_df.to_string())
+    logger.info("Input avg_turnover_dict:")
+    logger.info(avg_turnover_dict)
+
     logger.info("상세 전략 성과 요약표 생성을 시작합니다.")
 
     # --- 패널 (a): 월별 수익률 상세 통계 ---
@@ -117,6 +123,10 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
 
 def generate_sub_period_analysis(returns_df):
     """기간별 성과 분석표 (논문의 Table 6 형식) 생성."""
+    logger.info("--- [plot.py] Calling generate_sub_period_analysis ---")
+    logger.info("Input returns_df:")
+    logger.info(returns_df.to_string())
+
     logger.info("기간별 성과 분석표 생성을 시작합니다.")
     if returns_df.empty:
         logger.warning("기간별 성과 분석을 위한 데이터가 없습니다.")
@@ -233,6 +243,12 @@ def generate_performance_tables(strategy_returns, benchmark_returns):
 
 
 def generate_factor_analysis_table(strategy_returns, ff_df):
+    logger.info("--- [plot.py] Calling generate_factor_analysis_table ---")
+    logger.info("Input strategy_returns:")
+    logger.info(strategy_returns.to_string())
+    logger.info("Input ff_df:")
+    logger.info(ff_df.to_string())
+
     logger.info("[generate_factor_analysis_table] Function entry.")
     logger.info(f"[generate_factor_analysis_table] Input: strategy_returns shape={strategy_returns.shape}, ff_df shape={ff_df.shape}")
     logger.info("Starting Fama-French 3-factor regression analysis.")
