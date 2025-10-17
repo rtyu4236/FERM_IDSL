@@ -56,7 +56,13 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     backtest_dates_in_range = all_dates_in_df[
         (all_dates_in_df.year >= start_year) & (all_dates_in_df.year <= end_year)
     ]
-    backtest_dates = backtest_dates_in_range.to_period('M').unique().to_timestamp(how='end')
+    calendar_month_ends = backtest_dates_in_range.to_period('M').unique().to_timestamp(how='end')
+    backtest_dates = []
+    for date in calendar_month_ends:
+        while date not in all_dates_in_df:
+            date -= pd.DateOffset(days=1)
+        backtest_dates.append(date)
+    backtest_dates = pd.DatetimeIndex(backtest_dates)
     
     logger.info(f"[run_backtest] Backtest dates range: {backtest_dates.min()} to {backtest_dates.max()}, total {len(backtest_dates)} dates.")
     
