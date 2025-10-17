@@ -121,7 +121,7 @@ def run_tuning(full_feature_df, n_trials=50, end_date=None):
         'svr_gamma': best_params.get('svr_gamma'),
     }
 
-    output_path = os.path.join(config.OUTPUT_DIR, 'best_tcn_svr_params.json')
+    output_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')
     try:
         with open(output_path, 'w') as f:
             json.dump(tcn_params, f, indent=4)

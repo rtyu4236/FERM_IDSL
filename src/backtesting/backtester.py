@@ -169,7 +169,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     logger.info("--- End of Monthly Returns ---")
 
     cumulative_results_df = (1 + results_df).cumprod()
-    cum_results_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
+    cum_results_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'cumulative_returns.csv')
     cumulative_results_df.to_csv(cum_results_path)
     logger.info(f"Cumulative returns data saved successfully: {cum_results_path}")
     

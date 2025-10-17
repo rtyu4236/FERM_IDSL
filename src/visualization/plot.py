@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import traceback
 import scipy.stats
 
-OUTPUT_DIR = config.OUTPUT_DIR
+OUTPUT_DIR = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
 
 def _save_df_as_image(df, filename):
     logger.info(f"[_save_df_as_image] Function entry. Filename: {filename}")

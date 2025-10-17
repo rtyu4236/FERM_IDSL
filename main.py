@@ -72,7 +72,7 @@ if __name__ == '__main__':
     # 4. Visualize results
     logger_setup.logger.info("\nResult visualization started.")
     try:
-        cumulative_returns_path = os.path.join(config.OUTPUT_DIR, 'cumulative_returns.csv')
+        cumulative_returns_path = os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME, 'cumulative_returns.csv')
         cumulative_df = pd.read_csv(cumulative_returns_path, index_col=0, parse_dates=True)
         from src.visualization.plot import run_visualization
         avg_turnover_dict = {'BL_ML_Strategy': avg_turnover}

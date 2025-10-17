@@ -14,8 +14,11 @@ def setup_logger():
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
-    log_filename = f"backtest_log_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log"
-    log_filepath = os.path.join(config.OUTPUT_DIR, log_filename)
+    log_name = f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    os.makedirs(os.path.join(config.OUTPUT_DIR, log_name), exist_ok=True)
+    
+    log_filename = f"backtest_log_{log_name}.log"
+    log_filepath = os.path.join(config.OUTPUT_DIR, log_name, log_filename)
 
     logging.basicConfig(
         level=logging.INFO,
@@ -30,6 +33,11 @@ def setup_logger():
     logger = logging.getLogger()
     logger.info("Logger setup complete.")
     logger.info(f"Log file created at: {log_filepath}")
+    # Attach log identifiers/paths as attributes on the logger object
+    # Access via `logger.LOG_NAME`, `logger.LOG_DIR`, `logger.LOG_FILEPATH`
+    logger.LOG_NAME = log_name
+    logger.LOG_DIR = os.path.join(config.OUTPUT_DIR, log_name)
+    logger.LOG_FILEPATH = log_filepath
     return logger
 
 # Set up the logger when the module is loaded
