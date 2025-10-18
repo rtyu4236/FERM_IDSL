@@ -30,14 +30,15 @@ def load_raw_data():
     logger.info("Starting to load raw data files.")
     
     # Load daily data and unify column names to lowercase
-    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily_all.csv'), low_memory=False)
+    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily_cleaned.csv'), low_memory=False)
     daily_df.columns = [col.lower() for col in daily_df.columns]
     daily_df['date'] = pd.to_datetime(daily_df['date'])
     
     # Load monthly data and unify column names to lowercase
-    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly_all.csv'))
+    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly_cleaned.csv'), low_memory=False)
     monthly_df.columns = [col.lower() for col in monthly_df.columns]
     monthly_df['date'] = pd.to_datetime(monthly_df['date'])
+    monthly_df.drop_duplicates(subset=['permno', 'date'], keep='first', inplace=True)
     monthly_df = monthly_df[monthly_df['date'] >= '1990-01-01'].copy()
     monthly_df = monthly_df.dropna(subset=['permno'])
     monthly_df = monthly_df[['date', 'permno', 'ret']].copy()

@@ -36,7 +36,7 @@ class TCN_SVR_Objective:
         tcn_num_channels_layer2 = trial.suggest_int('num_channels_layer2', 8, 64, step=16)
         tcn_kernel_size = trial.suggest_int('kernel_size', 1, 5)
         tcn_dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
-        tcn_epochs = trial.suggest_int('epochs', 30, 100, step=10)
+        tcn_epochs = trial.suggest_int('epochs', 1, 2, step=1)
         tcn_lr = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
         svr_C = trial.suggest_float('svr_C', 1.0, 100.0, log=True)
         svr_gamma = trial.suggest_float('svr_gamma', 0.01, 1.0, log=True)
@@ -97,7 +97,7 @@ class TCN_SVR_Objective:
         final_val_loss = model.best_loss
         return final_val_loss
 
-def run_tuning(full_feature_df, n_trials=50, end_date=None):
+def run_tuning(full_feature_df, n_trials=2, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)

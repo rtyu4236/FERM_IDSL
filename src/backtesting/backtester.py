@@ -72,7 +72,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                 break
         if current_date:
             backtest_dates.append(current_date)
-    backtest_dates = pd.DatetimeIndex(backtest_dates)
+    backtest_dates = pd.DatetimeIndex(backtest_dates).unique()
     
     logger.info(f"[run_backtest] Backtest dates range: {backtest_dates.min()} to {backtest_dates.max()}, total {len(backtest_dates)} dates.")
     
@@ -162,20 +162,32 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
 
     logger.info("\nGenerating backtest analysis and report.")
     bl_returns_series = pd.concat(bl_returns).sort_index().squeeze().rename("BL_ML_Strategy")
+    # Ensure unique index for bl_returns_series
+    if not bl_returns_series.index.is_unique:
+        logger.warning("Duplicate dates found in bl_returns_series index. Dropping duplicates.")
+        bl_returns_series = bl_returns_series[~bl_returns_series.index.duplicated(keep='first')]
     
     _, filtered_benchmarks = _filter_config_by_permnos(all_permnos, etf_costs, benchmark_permnos)
     benchmark_returns_dict = {}
     valid_benchmark_permnos = [p for p in filtered_benchmarks if p is not None]
     for permno in valid_benchmark_permnos:
         permno_returns_df = monthly_df[monthly_df['permno'] == permno]
-        # 동일 날짜에 중복된 데이터가 있을 경우 첫 번째 값을 사용
-        permno_returns_df = permno_returns_df.drop_duplicates(subset='date', keep='first')
+        # 날짜별로 그룹화하여 첫 번째 항목을 사용함으로써 날짜 인덱스의 유일성을 보장합니다.
+        permno_returns_df = permno_returns_df.groupby('date').first().reset_index()
         permno_returns = permno_returns_df.set_index('date')['total_return']
         benchmark_returns_dict[permno] = permno_returns.rename(permno)
+        # Ensure unique index for each benchmark series
+        if not benchmark_returns_dict[permno].index.is_unique:
+            logger.warning(f"Duplicate dates found in benchmark series '{permno}' index. Dropping duplicates.")
+            benchmark_returns_dict[permno] = benchmark_returns_dict[permno][~benchmark_returns_dict[permno].index.duplicated(keep='first')]
     
     if None in filtered_benchmarks:
         one_over_n_returns = create_one_over_n_benchmark_investable(monthly_df, bl_returns_series.index, all_permnos)
         if one_over_n_returns is not None:
+            # Ensure unique index for 1/N Portfolio series
+            if not one_over_n_returns.index.is_unique:
+                logger.warning("Duplicate dates found in '1/N Portfolio' series index. Dropping duplicates.")
+                one_over_n_returns = one_over_n_returns[~one_over_n_returns.index.duplicated(keep='first')]
             benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
     
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})

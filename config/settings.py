@@ -50,8 +50,8 @@ MODEL_PARAMS = {
         'kernel_size': 3,
         'dropout': 0.2,
         'base_uncertainty': 0.05,
-        'epochs': 50,  # Default epochs
-        'early_stopping_patience': 10,
+        'epochs': 2,  # Default epochs
+        'early_stopping_patience': 2,
         'early_stopping_min_delta': 0.0001
     }
 }

@@ -114,8 +114,8 @@ class ETFQuantRanker:
             X_predict_scaled = scaler.transform(X_predict)
             
             models = {
-                'lr': LogisticRegression(random_state=RANDOM_SEED, max_iter=1000, n_jobs=1),
-                'rf': RandomForestClassifier(random_state=RANDOM_SEED, n_estimators=50, max_depth=15, min_samples_leaf=10, n_jobs=1)
+                'lr': LogisticRegression(random_state=RANDOM_SEED, max_iter=1, n_jobs=1),
+                'rf': RandomForestClassifier(random_state=RANDOM_SEED, n_estimators=1, max_depth=15, min_samples_leaf=10, n_jobs=1)
             }
             
             ml_scores_df = pd.DataFrame(index=predict_df.index)
