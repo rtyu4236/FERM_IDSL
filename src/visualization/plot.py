@@ -380,7 +380,7 @@ def run_visualization(cumulative_df, ff_df, avg_turnover_dict, start_year, end_y
         logger.info("[run_visualization] Function exit (empty cumulative_df).")
         return
     returns_df = _calculate_returns_from_cumulative(cumulative_df)
-    strategy_col = 'BL_ML_Strategy'
+    strategy_col = 'TCN-SVR'
     strategy_returns = returns_df[strategy_col]
     benchmark_returns = returns_df.drop(columns=[strategy_col])
     logger.info(f"[run_visualization] returns_df shape={returns_df.shape}, strategy_returns shape={strategy_returns.shape}, benchmark_returns shape={benchmark_returns.shape}")
