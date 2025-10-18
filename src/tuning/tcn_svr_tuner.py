@@ -1,4 +1,5 @@
 import optuna
+from optuna.samplers import CmaEsSampler
 import torch
 import numpy as np
 import pandas as pd
@@ -32,16 +33,15 @@ class TCN_SVR_Objective:
 
     def __call__(self, trial):
         tcn_lookback_window = trial.suggest_int('lookback_window', 12, 48, step=6)
-        tcn_num_channels_layer1 = trial.suggest_int('num_channels_layer1', 8, 64, step=16)
-        tcn_num_channels_layer2 = trial.suggest_int('num_channels_layer2', 8, 64, step=16)
-        tcn_kernel_size = trial.suggest_int('kernel_size', 1, 5)
+        tcn_num_channels_layer1 = trial.suggest_int('num_channels_layer1', 16, 64, step=16)
+        tcn_num_channels_layer2 = trial.suggest_int('num_channels_layer2', 16, 64, step=16)
+        tcn_kernel_size = trial.suggest_int('kernel_size', 1, 5, step=1)
         tcn_dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
         tcn_epochs = trial.suggest_int('epochs', 1, 2, step=1)
         tcn_lr = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
         svr_C = trial.suggest_float('svr_C', 1.0, 100.0, log=True)
         svr_gamma = trial.suggest_float('svr_gamma', 0.01, 1.0, log=True)
 
-        # Use data up to the specified end_date for tuning
         if self.end_date:
             tuning_df = self.full_feature_df[self.full_feature_df['date'] < self.end_date].copy()
         else:
@@ -101,7 +101,7 @@ def run_tuning(full_feature_df, n_trials=2, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(direction="minimize", sampler=CmaEsSampler())
     study.optimize(objective, n_trials=n_trials, n_jobs=1)
 
     logger.info("Tuning finished.")
