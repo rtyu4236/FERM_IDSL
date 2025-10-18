@@ -10,6 +10,11 @@ import matplotlib.pyplot as plt
 import traceback
 import scipy.stats
 
+# Apply academic style and set font
+plt.style.use('seaborn-v0_8-paper')
+plt.rcParams['font.family'] = 'Times New Roman'
+plt.rcParams['axes.unicode_minus'] = False # To handle minus sign correctly
+
 OUTPUT_DIR = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
 
 def _save_df_as_image(df, filename):
@@ -400,10 +405,16 @@ def run_visualization(cumulative_df, ff_df, avg_turnover_dict, start_year, end_y
     generate_strategy_performance_summary(returns_df, avg_turnover_dict)
     generate_sub_period_analysis(returns_df, start_year, end_year)
     generate_factor_analysis_table(strategy_returns, ff_df)
-    plot_cumulative_returns(cumulative_df)
-    plot_underwater(strategy_returns)
-    plot_additional_analytics(strategy_returns)
-    plot_monthly_returns_comparison(returns_df)
+
+    # Filter data to start from 2010 for specified plots
+    cumulative_df_plot = cumulative_df[cumulative_df.index.year >= 2010]
+    returns_df_plot = returns_df[returns_df.index.year >= 2010]
+    strategy_returns_plot = returns_df_plot[strategy_col] if strategy_col in returns_df_plot else pd.Series()
+
+    plot_cumulative_returns(cumulative_df_plot)
+    plot_underwater(strategy_returns_plot)
+    plot_additional_analytics(strategy_returns_plot)
+    plot_monthly_returns_comparison(returns_df_plot)
     logger.info("Visualization and analysis process complete.")
     logger.info("[run_visualization] Function exit.")
 
