@@ -1,6 +1,11 @@
 import pandas as pd
 import numpy as np
 import os
+import sys
+
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 import pandas_ta as ta
 from config import settings as config
 from statsmodels.tsa.stattools import adfuller

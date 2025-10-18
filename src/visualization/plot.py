@@ -44,6 +44,18 @@ def _calculate_returns_from_cumulative(cumulative_returns):
     logger.info("[_calculate_returns_from_cumulative] Function exit.")
     return returns
 
+def _calculate_downside_deviation(series, mar=0):
+    returns_below_mar = series[series < mar]
+    if returns_below_mar.empty:
+        return 0.0
+    return np.sqrt(np.mean((returns_below_mar - mar)**2))
+
+def _calculate_sortino_ratio(series, mar=0):
+    downside_dev = _calculate_downside_deviation(series, mar)
+    if downside_dev == 0:
+        return np.nan # Avoid division by zero
+    return (series.mean() - mar) / downside_dev
+
 def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
     """전략별 상세 성과 요약표 (논문의 Table 2 형식) 생성 (완전판)."""
     logger.info("--- [plot.py] Calling generate_strategy_performance_summary ---")
@@ -82,18 +94,6 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
         ]
         panel_a_df = panel_a_df.reindex(ordered_index_a)
         _save_df_as_image(panel_a_df, 'table_1_monthly_statistics.png')
-
-    def _calculate_downside_deviation(series, mar=0):
-    returns_below_mar = series[series < mar]
-    if returns_below_mar.empty:
-        return 0.0
-    return np.sqrt(np.mean((returns_below_mar - mar)**2))
-
-def _calculate_sortino_ratio(series, mar=0):
-    downside_dev = _calculate_downside_deviation(series, mar)
-    if downside_dev == 0:
-        return np.nan # Avoid division by zero
-    return (series.mean() - mar) / downside_dev
 
 # --- 패널 (b): 연환산 리스크-수익 지표 ---
     panel_b_data = {}
