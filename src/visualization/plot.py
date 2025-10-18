@@ -83,7 +83,19 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
         panel_a_df = panel_a_df.reindex(ordered_index_a)
         _save_df_as_image(panel_a_df, 'table_1_monthly_statistics.png')
 
-    # --- 패널 (b): 연환산 리스크-수익 지표 ---
+    def _calculate_downside_deviation(series, mar=0):
+    returns_below_mar = series[series < mar]
+    if returns_below_mar.empty:
+        return 0.0
+    return np.sqrt(np.mean((returns_below_mar - mar)**2))
+
+def _calculate_sortino_ratio(series, mar=0):
+    downside_dev = _calculate_downside_deviation(series, mar)
+    if downside_dev == 0:
+        return np.nan # Avoid division by zero
+    return (series.mean() - mar) / downside_dev
+
+# --- 패널 (b): 연환산 리스크-수익 지표 ---
     panel_b_data = {}
     for col in returns_df.columns:
         series = returns_df[col].dropna()
@@ -97,8 +109,8 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
             'Standard deviation': qs.stats.volatility(series),
             'Sharpe ratio': qs.stats.sharpe(series),
             't-statistic': t_stat,
-            'Downside deviation': qs.stats.downside_risk(series),
-            'Sortino ratio': qs.stats.sortino(series),
+            'Downside deviation': _calculate_downside_deviation(series),
+            'Sortino ratio': _calculate_sortino_ratio(series),
             'Gross profit': series[series > 0].sum(),
             'Gross loss': series[series < 0].sum(),
             'Profit factor': qs.stats.profit_factor(series),
@@ -142,7 +154,7 @@ def generate_sub_period_analysis(returns_df, start_year, end_year):
     metrics_to_calc = {
         'Mean return': qs.stats.cagr,
         'Sharpe ratio': qs.stats.sharpe,
-        'Sortino ratio': qs.stats.sortino,
+        'Sortino ratio': _calculate_sortino_ratio,
         'Profit factor': qs.stats.profit_factor,
         'Maximum drawdown': qs.stats.max_drawdown,
         'Calmar ratio': qs.stats.calmar
