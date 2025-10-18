@@ -51,7 +51,7 @@ if __name__ == '__main__':
         initial_universe_permnos = history_filtered_permnos
 
     # 3. Pass all data and settings to the backtester and run
-    ff_df_from_backtest, avg_turnover = backtester.run_backtest(
+    ff_df_from_backtest, avg_turnover, start_year_backtest, end_year_backtest = backtester.run_backtest(
         daily_df=daily_df,
         monthly_df=monthly_df,
         vix_df=vix_df,
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         logger_setup.logger.info(avg_turnover_dict)
         logger_setup.logger.info("--- End of Data for Visualization ---")
 
-        run_visualization(cumulative_df, ff_df_from_backtest, avg_turnover_dict)
+        run_visualization(cumulative_df, ff_df_from_backtest, avg_turnover_dict, start_year_backtest, end_year_backtest)
     except FileNotFoundError:
         logger_setup.logger.error(f"Visualization error: 'cumulative_returns.csv' file not found.")
     except Exception as e:

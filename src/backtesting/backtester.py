@@ -26,18 +26,22 @@ def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permno
     return filtered_costs, filtered_benchmark_permnos
 
 def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_permnos):
+    logger.info(f"[create_one_over_n_benchmark_investable] Function entry. target_dates length: {len(target_dates)}")
     try:
         investable_data = monthly_df[monthly_df['permno'].isin(investable_permnos)]
         if investable_data.empty:
-            return None
+            logger.warning("[create_one_over_n_benchmark_investable] Investable data is empty. Returning zero series.")
+            return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
         returns_pivot = investable_data.pivot_table(index='date', columns='permno', values='total_return')
         available_dates = returns_pivot.index.intersection(target_dates)
         returns_pivot = returns_pivot.loc[available_dates]
         one_over_n_returns = [(returns_pivot.loc[date].dropna() * (1.0 / len(returns_pivot.loc[date].dropna()))).sum() if date in returns_pivot.index and not returns_pivot.loc[date].dropna().empty else 0.0 for date in target_dates]
+        logger.info("[create_one_over_n_benchmark_investable] Successfully created 1/N portfolio series.")
         return pd.Series(one_over_n_returns, index=target_dates, name='1/N Portfolio')
     except Exception as e:
         logger.error(f"[create_one_over_n_benchmark_investable] Failed to create 1/N portfolio: {e}")
-        return None
+        logger.error(traceback.format_exc())
+        return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
 
 def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, tune_trials):
     logger.info("[run_backtest] Function entry.")
@@ -78,6 +82,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     
     bl_returns = []
     previous_weights = pd.Series(dtype=float)
+    avg_turnover_dict = {'BL_ML_Strategy': 0.0} # Initialize with a default value
     monthly_turnovers = [] # 월별 회전율을 저장할 리스트 추가
 
     for analysis_date in backtest_dates[:-1]:
@@ -144,12 +149,17 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         next_month_returns = monthly_df[monthly_df['date'] == next_month_date]
         net_bl_return = 0.0
         if not next_month_returns.empty and weights is not None and not weights.empty:
+            logger.info(f"[DEBUG] next_month_returns head:\n{next_month_returns.head().to_string()}")
+            logger.info(f"[DEBUG] weights head:\n{weights.head().to_string()}")
             merged_bl = pd.merge(weights.to_frame('weight'), next_month_returns, left_index=True, right_on='permno')
+            logger.info(f"[DEBUG] merged_bl head:\n{merged_bl.head().to_string()}")
             raw_bl_return = (merged_bl['weight'] * merged_bl['total_return']).sum()
+            logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
             holding_costs = (merged_bl['weight'] * merged_bl['permno'].map(lambda p: filtered_costs.get(p, {}).get('expense_ratio', 0) / 12)).sum()
             aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
             trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
             net_bl_return = raw_bl_return - holding_costs - trade_cost
+            logger.info(f"[DEBUG] net_bl_return: {net_bl_return}")
 
             turnover = np.abs(aligned_new - aligned_prev).sum() / 2
             monthly_turnovers.append(turnover)
@@ -192,6 +202,14 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})
 
+    # Rename columns for clarity in output
+    column_rename_map = {
+        'BL_ML_Strategy': 'TCN-SVR',
+        84398: 'SPY',  # Assuming 84398 is SPY
+        88320: 'QQQ'   # Assuming 88320 is QQQ
+    }
+    results_df = results_df.rename(columns=column_rename_map)
+
     logger.info("--- Monthly Returns for All Strategies (results_df) ---")
     logger.info(results_df.to_string())
     logger.info("--- End of Monthly Returns ---")
@@ -204,4 +222,4 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     final_returns = cumulative_results_df.iloc[-1] - 1
     logger.info("Final cumulative returns: " + ', '.join([f'{idx} {val:.4f}' for idx, val in final_returns.items()]))
     logger.info("[run_backtest] Function exit.")
-    return ff_df, avg_turnover
+    return ff_df, avg_turnover_dict, start_year, end_year

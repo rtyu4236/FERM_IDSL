@@ -121,40 +121,23 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
         panel_b_df = panel_b_df.reindex(ordered_index_b)
         _save_df_as_image(panel_b_df, 'table_2_annualized_risk_metrics.png')
 
-def generate_sub_period_analysis(returns_df):
+def generate_sub_period_analysis(returns_df, start_year, end_year):
     """기간별 성과 분석표 (논문의 Table 6 형식) 생성."""
     logger.info("--- [plot.py] Calling generate_sub_period_analysis ---")
-    logger.info("Input returns_df:")
-    logger.info(returns_df.to_string())
+    logger.info(f"Input returns_df shape={returns_df.shape}, start_year={start_year}, end_year={end_year}")
 
     logger.info("기간별 성과 분석표 생성을 시작합니다.")
     if returns_df.empty:
         logger.warning("기간별 성과 분석을 위한 데이터가 없습니다.")
         return
 
-    backtest_start_date = returns_df.index.min()
-    backtest_end_date = returns_df.index.max()
-
-    potential_periods = {
-        '01/1980 - 12/1999': (pd.to_datetime('1980-01-01'), pd.to_datetime('1999-12-31')),
-        '01/2000 - 12/2006': (pd.to_datetime('2000-01-01'), pd.to_datetime('2006-12-31')),
-        '01/2007 - 12/2009': (pd.to_datetime('2007-01-01'), pd.to_datetime('2009-12-31')),
-        '01/2010 - 12/2019': (pd.to_datetime('2010-01-01'), pd.to_datetime('2019-12-31')),
-        '01/2020 - 12/2020': (pd.to_datetime('2020-01-01'), pd.to_datetime('2020-12-31'))
-    }
-
-    periods_to_analyze = {}
-    for name, (period_start, period_end) in potential_periods.items():
-        # Check for overlap
-        if period_start <= backtest_end_date and period_end >= backtest_start_date:
-            actual_start = max(period_start, backtest_start_date)
-            actual_end = min(period_end, backtest_end_date)
-            new_name = f"{actual_start.strftime('%m/%Y')} - {actual_end.strftime('%m/%Y')}"
-            periods_to_analyze[new_name] = (actual_start, actual_end)
-
-    if not periods_to_analyze:
-        logger.warning("백테스트 기간과 겹치는 분석 대상 기간이 없습니다.")
-        return
+    sub_periods = {}
+    current_start = start_year
+    while current_start <= end_year:
+        current_end = min(current_start + 4, end_year) # 5년 단위 (예: 2015-2019)
+        period_name = f'{current_start:04d}/01 - {current_end:04d}/12'
+        sub_periods[period_name] = (f'{current_start:04d}-01-01', f'{current_end:04d}-12-31')
+        current_start = current_end + 1
 
     metrics_to_calc = {
         'Mean return': qs.stats.cagr,
@@ -167,14 +150,14 @@ def generate_sub_period_analysis(returns_df):
 
     all_periods_data = []
 
-    for period_name, (start_date, end_date) in periods_to_analyze.items():
-        period_df = returns_df.loc[start_date:end_date]
-        if period_df.empty:
+    for period_name, (start_date_str, end_date_str) in sub_periods.items():
+        period_returns = returns_df.loc[start_date_str:end_date_str]
+        if period_returns.empty:
             continue
 
         period_results = {}
-        for col in period_df.columns:
-            series = period_df[col].dropna()
+        for col in period_returns.columns:
+            series = period_returns[col].dropna()
             if series.empty: continue
             
             calculated_metrics = {metric_name: func(series) for metric_name, func in metrics_to_calc.items()}
@@ -186,9 +169,8 @@ def generate_sub_period_analysis(returns_df):
             all_periods_data.append(period_results_df)
 
     if all_periods_data:
-        final_df = pd.concat(all_periods_data, keys=periods_to_analyze.keys())
+        final_df = pd.concat(all_periods_data, keys=[name for name in sub_periods.keys()])
         _save_df_as_image(final_df, 'table_6_sub_period_analysis.png')
-
 def generate_performance_tables(strategy_returns, benchmark_returns):
     logger.info("[generate_performance_tables] Function entry.")
     logger.info(f"[generate_performance_tables] Input: strategy_returns shape={strategy_returns.shape}, benchmark_returns shape={benchmark_returns.shape}")
@@ -389,9 +371,9 @@ def plot_monthly_returns_comparison(returns_df):
         logger.error(traceback.format_exc())
     logger.info("[plot_monthly_returns_comparison] Function exit.")
 
-def run_visualization(cumulative_df, ff_df, avg_turnover_dict):
+def run_visualization(cumulative_df, ff_df, avg_turnover_dict, start_year, end_year):
     logger.info("[run_visualization] Function entry.")
-    logger.info(f"[run_visualization] Input: cumulative_df shape={cumulative_df.shape}, ff_df shape={ff_df.shape}")
+    logger.info(f"[run_visualization] Input: cumulative_df shape={cumulative_df.shape}, ff_df shape={ff_df.shape}, start_year={start_year}, end_year={end_year}")
     logger.info("Starting visualization and analysis process.")
     if cumulative_df.empty:
         logger.warning("Stopping visualization process: cumulative returns data is empty.")
@@ -404,7 +386,7 @@ def run_visualization(cumulative_df, ff_df, avg_turnover_dict):
     logger.info(f"[run_visualization] returns_df shape={returns_df.shape}, strategy_returns shape={strategy_returns.shape}, benchmark_returns shape={benchmark_returns.shape}")
     # generate_performance_tables(strategy_returns, benchmark_returns)
     generate_strategy_performance_summary(returns_df, avg_turnover_dict)
-    generate_sub_period_analysis(returns_df)
+    generate_sub_period_analysis(returns_df, start_year, end_year)
     generate_factor_analysis_table(strategy_returns, ff_df)
     plot_cumulative_returns(cumulative_df)
     plot_underwater(strategy_returns)
