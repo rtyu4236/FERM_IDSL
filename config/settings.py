@@ -17,7 +17,7 @@ END_YEAR = 2023
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 50
+TOP_N_ETFS = 30
 
 # --- Data File Paths ---
 try:
@@ -50,8 +50,8 @@ MODEL_PARAMS = {
         'kernel_size': 3,
         'dropout': 0.2,
         'base_uncertainty': 0.05,
-        'epochs': 150, 
-        'early_stopping_patience': 15,
+        'epochs': 50, 
+        'early_stopping_patience': 8,
         'early_stopping_min_delta': 0.0001
     }
 }
