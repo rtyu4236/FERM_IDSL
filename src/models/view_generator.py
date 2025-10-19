@@ -240,7 +240,8 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             dropout=model_params['dropout'],
             lookback_window=model_params['lookback_window'],
             svr_C=model_params.get('svr_C', 1.0),
-            svr_gamma=model_params.get('svr_gamma', 'scale')
+            svr_gamma=model_params.get('svr_gamma', 'scale'),
+            lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
         )
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
