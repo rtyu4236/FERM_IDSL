@@ -97,7 +97,7 @@ class TCN_SVR_Objective:
         final_val_loss = model.best_loss
         return final_val_loss
 
-def run_tuning(full_feature_df, n_trials=25, end_date=None):
+def run_tuning(full_feature_df, n_trials=15, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
