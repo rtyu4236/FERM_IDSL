@@ -51,7 +51,7 @@ MODEL_PARAMS = {
         'dropout': 0.2,
         'base_uncertainty': 0.05,
         'epochs': 2,  # Default epochs
-        'early_stopping_patience': 2,
+        'early_stopping_patience': 15,
         'early_stopping_min_delta': 0.0001
     }
 }
