@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the backtesting and visualization process.")
     parser.add_argument('--no-tune', dest='tune', action='store_false', help="Skip the monthly rolling hyperparameter tuning.")
     parser.add_argument('--no-ranking', dest='ranking', action='store_false', help="Skip the monthly ETF ranking and use all permnos.")
-    parser.add_argument('--trials', type=int, default=2, help="Number of trials for hyperparameter tuning.")
+    parser.add_argument('--trials', type=int, help="Number of trials for hyperparameter tuning.")
     args = parser.parse_args()
 
     logger_setup.logger.info("main.py execution started.")
