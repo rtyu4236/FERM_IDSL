@@ -43,7 +43,7 @@ def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_
         logger.error(traceback.format_exc())
         return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
 
-def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, tune_trials):
+def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune): # Removed tune_trials
     logger.info("[run_backtest] Function entry.")
     qs.extend_pandas()
 
@@ -102,7 +102,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
 
         if run_rolling_tune and model_params.get('use_tcn_svr', False):
             logger.info(f"Running hyperparameter tuning for {analysis_date.strftime('%Y-%m')}...")
-            tcn_svr_tuner.run_tuning(ml_features_df, n_trials=tune_trials, end_date=analysis_date)
+            tcn_svr_tuner.run_tuning(ml_features_df, n_trials=config.MODEL_PARAMS['tcn_svr_params']['tune_trials_per_month'], end_date=analysis_date)
             current_model_params = config.get_model_params()
             active_model_params = current_model_params['tcn_svr_params']
             logger.info(f"Tuned parameters for {analysis_date.strftime('%Y-%m')}:\n{json.dumps(current_model_params, indent=2)}")

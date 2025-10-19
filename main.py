@@ -15,11 +15,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the backtesting and visualization process.")
     parser.add_argument('--no-tune', dest='tune', action='store_false', help="Skip the monthly rolling hyperparameter tuning.")
     parser.add_argument('--no-ranking', dest='ranking', action='store_false', help="Skip the monthly ETF ranking and use all permnos.")
-    parser.add_argument('--trials', type=int, help="Number of trials for hyperparameter tuning.")
-    args = parser.parse_args()
+    args = parser.parse_args() # No --trials argument anymore
 
     logger_setup.logger.info("main.py execution started.")
-    logger_setup.logger.info(f"Arguments: tune={args.tune}, ranking={args.ranking}, trials={args.trials}")
+    logger_setup.logger.info(f"Arguments: tune={args.tune}, ranking={args.ranking}, tune_trials_per_month={config.MODEL_PARAMS['tcn_svr_params']['tune_trials_per_month']}")
 
     # 1. Load all data
     daily_df, monthly_df, vix_df, ff_df, all_permnos = data_manager.load_raw_data()
@@ -64,8 +63,7 @@ if __name__ == '__main__':
         benchmark_permnos=config.BENCHMARK_PERMNOS,
         use_etf_ranking=args.ranking,
         top_n=config.TOP_N_ETFS,
-        run_rolling_tune=args.tune,
-        tune_trials=args.trials
+        run_rolling_tune=args.tune
     )
     logger_setup.logger.info("backtester.run_backtest completed.")
 

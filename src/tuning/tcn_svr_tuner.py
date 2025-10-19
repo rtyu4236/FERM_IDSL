@@ -1,5 +1,4 @@
 import optuna
-from optuna.samplers import CmaEsSampler
 import torch
 import numpy as np
 import pandas as pd
@@ -32,15 +31,45 @@ class TCN_SVR_Objective:
         return np.array(xs), np.array(ys)
 
     def __call__(self, trial):
-        tcn_lookback_window = trial.suggest_int('lookback_window', 12, 48, step=6)
-        tcn_num_channels_layer1 = trial.suggest_int('num_channels_layer1', 16, 64, step=8)
-        tcn_num_channels_layer2 = trial.suggest_int('num_channels_layer2', 16, 64, step=8)
-        tcn_kernel_size = trial.suggest_int('kernel_size', 1, 5, step=1)
-        tcn_dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
-        tcn_epochs = trial.suggest_int('epochs', 5, 150, step=2)
-        tcn_lr = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
-        svr_C = trial.suggest_float('svr_C', 1.0, 100.0, log=True)
-        svr_gamma = trial.suggest_float('svr_gamma', 0.01, 1.0, log=True)
+        tcn_lookback_window = trial.suggest_int(
+            'lookback_window',
+            self.config_model_params['tcn_svr_params']['lookback_window_min'], 
+            self.config_model_params['tcn_svr_params']['lookback_window'], 
+            step=self.config_model_params['tcn_svr_params']['lookback_window_step'] 
+        )
+        tcn_num_channels_layer1 = trial.suggest_int(
+            'num_channels_layer1',
+            self.config_model_params['tcn_svr_params']['num_channels_min'], 
+            self.config_model_params['tcn_svr_params']['num_channels_max'], 
+            step=self.config_model_params['tcn_svr_params']['num_channels_step'] 
+        )
+        tcn_num_channels_layer2 = trial.suggest_int(
+            'num_channels_layer2',
+            self.config_model_params['tcn_svr_params']['num_channels_min'], 
+            self.config_model_params['tcn_svr_params']['num_channels_max'], 
+            step=self.config_model_params['tcn_svr_params']['num_channels_step'] 
+        )
+        tcn_kernel_size = self.config_model_params['tcn_svr_params']['kernel_size']
+        tcn_dropout = trial.suggest_float(
+            'dropout',
+            self.config_model_params['tcn_svr_params']['dropout_min'], 
+            self.config_model_params['tcn_svr_params']['dropout_max'],
+            step=self.config_model_params['tcn_svr_params']['dropout_step'] 
+        )
+        tcn_epochs = self.config_model_params['tcn_svr_params']['epochs'] 
+        tcn_lr = self.config_model_params['tcn_svr_params']['lr']
+        svr_C = trial.suggest_float(
+            'svr_C',
+            self.config_model_params['tcn_svr_params']['svr_C_min'],
+            self.config_model_params['tcn_svr_params']['svr_C_max'],
+            log=True
+        )
+        svr_gamma = trial.suggest_float(
+            'svr_gamma',
+            self.config_model_params['tcn_svr_params']['svr_gamma_min'], 
+            self.config_model_params['tcn_svr_params']['svr_gamma_max'], 
+            log=True
+        )
 
         if self.end_date:
             tuning_df = self.full_feature_df[self.full_feature_df['date'] < self.end_date].copy()
@@ -102,7 +131,7 @@ def run_tuning(full_feature_df, n_trials=15, end_date=None):
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=n_trials, n_jobs=1)
+    study.optimize(objective, n_trials=n_trials, n_jobs=config.MODEL_PARAMS['tcn_svr_params']['optuna_n_jobs'])
 
     logger.info("Tuning finished.")
     logger.info(f"Best trial for period ending {end_date}:")

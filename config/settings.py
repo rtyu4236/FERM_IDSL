@@ -17,7 +17,7 @@ END_YEAR = 2023
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 30
+TOP_N_ETFS = 20
 
 # --- Data File Paths ---
 try:
@@ -45,16 +45,31 @@ MODEL_PARAMS = {
     'use_tcn_svr': True,
     'tcn_svr_params': {
         'tau': 0.025,
-        'lookback_window': 48,
+        'lookback_window': 48, 
+        'lookback_window_step': 6, 
+        'num_channels_step': 8,
         'num_channels': [32, 32],
         'kernel_size': 3,
         'dropout': 0.2,
         'base_uncertainty': 0.05,
-        'epochs': 50, 
-        'early_stopping_patience': 8,
-        'early_stopping_min_delta': 0.0001
-    }
-}
+        'epochs': 6,
+        'lr': 0.001, 
+        'early_stopping_patience': 15,
+        'early_stopping_min_delta': 0.0001,
+        'tune_trials_per_month': 1,
+        'optuna_n_jobs': 36,
+        # Optuna search space parameters
+        'lookback_window_min': 12,
+        'num_channels_min': 16,
+        'num_channels_max': 64,
+        'dropout_min': 0.1,
+        'dropout_max': 0.5,
+        'dropout_step': 0.1,
+        'svr_C_min': 1.0,
+        'svr_C_max': 100.0,
+        'svr_gamma_min': 0.01,
+        'svr_gamma_max': 1.0
+    }}
 
 # Data Caching Settings
 USE_CACHING = False

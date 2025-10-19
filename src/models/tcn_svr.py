@@ -22,7 +22,7 @@ class TCN_SVR_Model:
     The SVR part is a scikit-learn model that takes the TCN\'s predicted indicators as input
     to predict the final return.
     """
-    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale'):
+    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale', lr=0.001):
         """
         Initializes the TCN and SVR models.
 
@@ -35,9 +35,10 @@ class TCN_SVR_Model:
             lookback_window (int): The number of past time steps to use for prediction.
             svr_C (float): The C parameter for the SVR model.
             svr_gamma (str or float): The gamma parameter for the SVR model.
+            lr (float): The learning rate for the TCN optimizer.
         """
         logger.info("[TCN_SVR_Model.__init__] Function entry.")
-        logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}")
+        logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}, lr={lr}")
         self.tcn_model = TCN(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
         logger.info(f"[TCN_SVR_Model.__init__] TCN model initialized. Type: {type(self.tcn_model)}")
         self.net = nn.Sequential(
@@ -46,7 +47,7 @@ class TCN_SVR_Model:
             nn.Linear(num_channels[-1], output_size)
         )
         logger.info(f"[TCN_SVR_Model.__init__] Sequential network initialized. Type: {type(self.net)}")
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
         self.criterion = nn.MSELoss()
         self.lookback_window = lookback_window
 
@@ -136,15 +137,6 @@ class TCN_SVR_Model:
         logger.info("[TCN_SVR_Model.fit] SVR training complete. Function exit.")
 
     def predict(self, X_test_tensor):
-        """
-        Makes a prediction using the trained TCN and SVR models.
-
-        Args:
-            X_test_tensor (torch.Tensor): Test data for prediction.
-
-        Returns:
-            float: The predicted return.
-        """
         logger.info("[TCN_SVR_Model.predict] Function entry.")
         logger.info(f"[TCN_SVR_Model.predict] Input: X_test_tensor shape={X_test_tensor.shape}, dtype={X_test_tensor.dtype}")
         
