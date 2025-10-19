@@ -12,12 +12,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2009
+START_YEAR = 2020
 END_YEAR = 2023
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 20
+TOP_N_ETFS = 15
 
 # --- Data File Paths ---
 try:
@@ -57,7 +57,7 @@ MODEL_PARAMS = {
         'early_stopping_patience': 8,
         'early_stopping_min_delta': 0.0001,
         'tune_trials_per_month': 1,
-        'optuna_n_jobs': 36,
+        'optuna_n_jobs':-1,
         # Optuna search space parameters
         'lookback_window_min': 12,
         'num_channels_min': 16,
