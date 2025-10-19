@@ -33,11 +33,11 @@ class TCN_SVR_Objective:
 
     def __call__(self, trial):
         tcn_lookback_window = trial.suggest_int('lookback_window', 12, 48, step=6)
-        tcn_num_channels_layer1 = trial.suggest_int('num_channels_layer1', 16, 64, step=16)
-        tcn_num_channels_layer2 = trial.suggest_int('num_channels_layer2', 16, 64, step=16)
+        tcn_num_channels_layer1 = trial.suggest_int('num_channels_layer1', 16, 64, step=8)
+        tcn_num_channels_layer2 = trial.suggest_int('num_channels_layer2', 16, 64, step=8)
         tcn_kernel_size = trial.suggest_int('kernel_size', 1, 5, step=1)
         tcn_dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
-        tcn_epochs = trial.suggest_int('epochs', 1, 2, step=1)
+        tcn_epochs = trial.suggest_int('epochs', 5, 150, step=2)
         tcn_lr = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
         svr_C = trial.suggest_float('svr_C', 1.0, 100.0, log=True)
         svr_gamma = trial.suggest_float('svr_gamma', 0.01, 1.0, log=True)

@@ -12,7 +12,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2010
+START_YEAR = 2009
 END_YEAR = 2023
 
 # ETF Ranking Feature Settings
@@ -50,7 +50,7 @@ MODEL_PARAMS = {
         'kernel_size': 3,
         'dropout': 0.2,
         'base_uncertainty': 0.05,
-        'epochs': 2,  # Default epochs
+        'epochs': 150, 
         'early_stopping_patience': 15,
         'early_stopping_min_delta': 0.0001
     }
