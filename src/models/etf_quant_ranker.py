@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
+import os
+import pickle
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from src.utils.logger import logger
+from config import settings as config
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -48,7 +51,11 @@ def create_etf_universe_from_daily(daily_df, etf_permnos=None):
 class ETFQuantRanker:
     def __init__(self, ml_training_window_months: int = 36):
         self.ml_training_window_months = ml_training_window_months
-        logger.info(f"ETFQuantRanker initialized with training window: {self.ml_training_window_months} months.")
+        self.ranking_lookback_years = getattr(config, 'MODEL_PARAMS', {}).get('ranking_lookback_years', None)
+        self.ranking_cache = getattr(config, 'MODEL_PARAMS', {}).get('ranking_cache', False)
+        self.cache_dir = os.path.join(getattr(config, 'CACHE_DIR', './cache'), 'ranking_cache')
+        os.makedirs(self.cache_dir, exist_ok=True)
+        logger.info(f"ETFQuantRanker initialized with training window: {self.ml_training_window_months} months, lookback years: {self.ranking_lookback_years}, cache: {self.ranking_cache}")
 
     def _calculate_rsi(self, series: pd.Series, length: int = 14) -> pd.Series:
         delta = series.diff()
@@ -78,7 +85,25 @@ class ETFQuantRanker:
         analysis_date = pd.to_datetime(analysis_date_str)
         logger.info(f"Starting selection of top {top_n} ETFs as of {analysis_date_str}...")
 
-        data_for_ranking = daily_df[daily_df['date'] <= analysis_date].copy()
+        # Disk cache key
+        cache_key = f"rank_{analysis_date.strftime('%Y%m%d')}_top{top_n}.pkl"
+        cache_path = os.path.join(self.cache_dir, cache_key)
+        if self.ranking_cache and os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    cached = pickle.load(f)
+                logger.info(f"Loaded ranking cache for {analysis_date_str} top{top_n} from {cache_path}")
+                return cached
+            except Exception as e:
+                logger.warning(f"Failed to load ranking cache: {e}")
+
+        # Apply lookback window to daily data for ranking
+        if self.ranking_lookback_years is not None:
+            lookback_start = analysis_date - pd.DateOffset(years=self.ranking_lookback_years)
+            data_for_ranking = daily_df[(daily_df['date'] <= analysis_date) & (daily_df['date'] >= lookback_start)].copy()
+        else:
+            data_for_ranking = daily_df[daily_df['date'] <= analysis_date].copy()
+
         etf_universe_df = create_etf_universe_from_daily(data_for_ranking, etf_permnos=all_permnos)
 
         factors_df = self._calculate_factors(etf_universe_df)
@@ -147,6 +172,15 @@ class ETFQuantRanker:
         rebal_df['final_score'] = 0.5 * rebal_df['momentum_score'] + 0.5 * rebal_df['ml_score_rank']
 
         top_permnos = rebal_df.sort_values('final_score', ascending=False).head(top_n).index.get_level_values('permno').tolist()
-        
         logger.info(f"Selection complete: {len(top_permnos)} ETFs")
+
+        # Save to disk cache if enabled
+        if self.ranking_cache:
+            try:
+                with open(cache_path, 'wb') as f:
+                    pickle.dump(top_permnos, f)
+                logger.info(f"Saved ranking cache for {analysis_date_str} top{top_n} to {cache_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save ranking cache: {e}")
+
         return top_permnos

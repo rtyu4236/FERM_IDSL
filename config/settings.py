@@ -12,12 +12,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2009
-END_YEAR = 2023
+START_YEAR = 2004
+END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 20
+TOP_N_ETFS = 15
 
 # --- Data File Paths ---
 try:
@@ -41,23 +41,41 @@ MODEL_PARAMS = {
         'view_outperformance': 0.02 / 12,
     },
 
+    # ETF Ranking Parameters
+    'ranking_lookback_years': 5,  # Only use last N years for ranking features (None for all)
+    'ranking_cache': True,        # Enable disk cache for monthly ranking results
+
     # TCN-SVR Model Parameters
     'use_tcn_svr': True,
     'tcn_svr_params': {
         'tau': 0.025,
-        'lookback_window': 48, 
-        'lookback_window_step': 6, 
+        'lookback_window': 48,
+        'lookback_window_step': 6,
         'num_channels_step': 8,
-        'num_channels': [32, 32],
-        'kernel_size': 3,
-        'dropout': 0.2,
-        'base_uncertainty': 0.05,
-        'epochs': 50,
-        'lr': 0.001, 
-        'early_stopping_patience': 8,
+        # Lighter default model for faster monthly training
+    # Model strength controls (adjust for heavier training)
+    'num_channels': [32, 32],
+    'kernel_size': 3,
+    'dropout': 0.2,
+    'base_uncertainty': 0.05,
+    'epochs': 40,
+    'lr': 0.001,
+    'early_stopping_patience': 8,
         'early_stopping_min_delta': 0.0001,
-        'tune_trials_per_month': 1,
-        'optuna_n_jobs': 36,
+        # Limit how much history to use for training per permno in daily rows (None = all)
+        'train_window_rows': 720,
+    # Optimization toggles
+    'warm_start': True,
+    'use_lag_features': True,
+    # Keep at most this many lag features if set (e.g., 64). None uses all available.
+    'max_lag_features': 64,
+        # Hyperparameter tuning controls
+        'tune_trials_per_month': 15,
+        # Tune every K months (reduce monthly overhead). 1 = every month
+        'tune_every_k_months': 3,
+        # Keep modest parallelism to avoid oversubscription on shared machines
+        # Use 1 for GPU, or 2~4 for CPU-only environments
+        'optuna_n_jobs': 1,
         # Optuna search space parameters
         'lookback_window_min': 12,
         'num_channels_min': 16,
@@ -72,7 +90,7 @@ MODEL_PARAMS = {
     }}
 
 # Data Caching Settings
-USE_CACHING = False
+USE_CACHING = True
 
 # Feature Stationarity Check Settings
 CHECK_STATIONARITY = True

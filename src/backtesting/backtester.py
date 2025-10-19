@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import json
+import traceback
 from src.data_processing import manager as data_manager
 from src.models import view_generator as ml_view_generator
 from src.models.black_litterman import BlackLittermanPortfolio
@@ -22,7 +23,8 @@ def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permno
             logger.warning(f"Cost information for PERMNO '{permno}' not found in config.ETF_COSTS. Using default value 0.")
             filtered_costs[permno] = {'expense_ratio': 0.0, 'trading_cost_spread': 0.0}
     
-    filtered_benchmark_permnos = [p for p in benchmark_permnos if p is None or p in available_set]
+    # Do not filter out benchmarks based on investable universe; keep as provided (None allowed)
+    filtered_benchmark_permnos = benchmark_permnos
     return filtered_costs, filtered_benchmark_permnos
 
 def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_permnos):
@@ -43,7 +45,7 @@ def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_
         logger.error(traceback.format_exc())
         return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
 
-def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune): # Removed tune_trials
+def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, liquid_universe_dict=None):
     logger.info("[run_backtest] Function entry.")
     qs.extend_pandas()
 
@@ -81,26 +83,55 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     logger.info(f"[run_backtest] Backtest dates range: {backtest_dates.min()} to {backtest_dates.max()}, total {len(backtest_dates)} dates.")
     
     bl_returns = []
+    topn_equal_weight_returns = [] if use_etf_ranking else None
     previous_weights = pd.Series(dtype=float)
     avg_turnover_dict = {'BL_ML_Strategy': 0.0} # Initialize with a default value
     monthly_turnovers = [] # 월별 회전율을 저장할 리스트 추가
 
+    # liquid_universe_dict 인자 지원
+    import inspect
+    sig = inspect.signature(run_backtest)
+    use_liquid_dict = 'liquid_universe_dict' in sig.parameters
+
     for analysis_date in backtest_dates[:-1]:
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
 
-        if use_etf_ranking and ranker:
-            logger.info(f"Ranking ETFs for {analysis_date.strftime('%Y-%m')}...")
-            universe_for_month = ranker.get_top_permnos(str(analysis_date.date()), daily_df, all_permnos, top_n=top_n)
+        # 1) 유동성 필터 전/후 개수 로깅 및 후보군 생성
+        pre_liq_count = len(all_permnos)
+        if liquid_universe_dict is not None:
+            key = analysis_date
+            if key not in liquid_universe_dict:
+                # 월말이 없으면 가장 가까운 과거 월말 사용
+                key = max([d for d in liquid_universe_dict.keys() if d <= analysis_date])
+            candidate_permnos = liquid_universe_dict.get(key, all_permnos)
         else:
-            universe_for_month = all_permnos
-        logger.info(f"Universe for {analysis_date.strftime('%Y-%m')}: {len(universe_for_month)} permnos")
+            candidate_permnos = all_permnos
+        after_liq_count = len(candidate_permnos)
+        logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Liquidity filter: before={pre_liq_count}, after={after_liq_count}")
+
+        # 2) 랭킹 적용 및 리스트 로깅
+        if use_etf_ranking and ranker:
+            if not candidate_permnos:
+                ranked_permnos = []
+            else:
+                ranked_permnos = ranker.get_top_permnos(str(analysis_date.date()), daily_df, candidate_permnos, top_n=top_n)
+            logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Rank selected ({len(ranked_permnos)}): {ranked_permnos}")
+            universe_for_month = ranked_permnos
+        else:
+            universe_for_month = candidate_permnos
+            logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Ranking disabled. Using candidate universe ({len(universe_for_month)}).")
 
         if not universe_for_month:
             logger.warning(f"Universe for {analysis_date.strftime('%Y-%m')} is empty. Skipping month.")
             bl_returns.append(pd.Series([0.0], index=[analysis_date + pd.offsets.MonthEnd(1)]))
             continue
 
-        if run_rolling_tune and model_params.get('use_tcn_svr', False):
+        # Check tuning cadence (every K months)
+        tune_every_k = model_params.get('tcn_svr_params', {}).get('tune_every_k_months', 1)
+        month_index = (analysis_date.year - backtest_dates.min().year) * 12 + (analysis_date.month - backtest_dates.min().month)
+        should_tune_this_month = (month_index % tune_every_k == 0)
+
+        if run_rolling_tune and model_params.get('use_tcn_svr', False) and should_tune_this_month:
             logger.info(f"Running hyperparameter tuning for {analysis_date.strftime('%Y-%m')}...")
             tcn_svr_tuner.run_tuning(ml_features_df, n_trials=config.MODEL_PARAMS['tcn_svr_params']['tune_trials_per_month'], end_date=analysis_date)
             current_model_params = config.get_model_params()
@@ -167,6 +198,18 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         bl_returns.append(pd.Series([net_bl_return], index=[next_month_date]))
         previous_weights = weights
 
+        # Compute TopN 1/N benchmark (equal weight on the universe_for_month), if ranking is enabled
+        if use_etf_ranking and topn_equal_weight_returns is not None:
+            if not next_month_returns.empty and universe_for_month:
+                topn_next = next_month_returns[next_month_returns['permno'].isin(universe_for_month)]
+                if not topn_next.empty:
+                    ew_ret = topn_next['total_return'].mean()
+                else:
+                    ew_ret = 0.0
+            else:
+                ew_ret = 0.0
+            topn_equal_weight_returns.append(pd.Series([ew_ret], index=[next_month_date]))
+
     avg_turnover = np.mean(monthly_turnovers) if monthly_turnovers else 0
     logger.info(f"Average Monthly Turnover: {avg_turnover:.2%}")
 
@@ -182,23 +225,38 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     valid_benchmark_permnos = [p for p in filtered_benchmarks if p is not None]
     for permno in valid_benchmark_permnos:
         permno_returns_df = monthly_df[monthly_df['permno'] == permno]
+        if permno_returns_df.empty:
+            logger.warning(f"Benchmark permno {permno} has no data; skipping.")
+            continue
         # 날짜별로 그룹화하여 첫 번째 항목을 사용함으로써 날짜 인덱스의 유일성을 보장합니다.
         permno_returns_df = permno_returns_df.groupby('date').first().reset_index()
         permno_returns = permno_returns_df.set_index('date')['total_return']
+        if permno_returns.empty:
+            logger.warning(f"Benchmark permno {permno} returns series is empty after processing; skipping.")
+            continue
         benchmark_returns_dict[permno] = permno_returns.rename(permno)
         # Ensure unique index for each benchmark series
         if not benchmark_returns_dict[permno].index.is_unique:
             logger.warning(f"Duplicate dates found in benchmark series '{permno}' index. Dropping duplicates.")
             benchmark_returns_dict[permno] = benchmark_returns_dict[permno][~benchmark_returns_dict[permno].index.duplicated(keep='first')]
+        # Align benchmark to BL backtest dates for fair comparison
+        benchmark_returns_dict[permno] = benchmark_returns_dict[permno].reindex(bl_returns_series.index)
     
-    if None in filtered_benchmarks:
-        one_over_n_returns = create_one_over_n_benchmark_investable(monthly_df, bl_returns_series.index, all_permnos)
-        if one_over_n_returns is not None:
-            # Ensure unique index for 1/N Portfolio series
-            if not one_over_n_returns.index.is_unique:
-                logger.warning("Duplicate dates found in '1/N Portfolio' series index. Dropping duplicates.")
-                one_over_n_returns = one_over_n_returns[~one_over_n_returns.index.duplicated(keep='first')]
-            benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
+    # Overall 1/N benchmark across all investable permnos (unconditional)
+    one_over_n_returns = create_one_over_n_benchmark_investable(monthly_df, bl_returns_series.index, all_permnos)
+    if one_over_n_returns is not None:
+        # Ensure unique index for 1/N Portfolio series
+        if not one_over_n_returns.index.is_unique:
+            logger.warning("Duplicate dates found in '1/N Portfolio' series index. Dropping duplicates.")
+            one_over_n_returns = one_over_n_returns[~one_over_n_returns.index.duplicated(keep='first')]
+        benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
+
+    # Include TopN 1/N benchmark if created
+    if use_etf_ranking and topn_equal_weight_returns is not None and len(topn_equal_weight_returns) > 0:
+        topn_series = pd.concat(topn_equal_weight_returns).sort_index().squeeze().rename('TopN 1/N')
+        # Align to strategy dates just in case
+        topn_series = topn_series.reindex(bl_returns_series.index, fill_value=0.0)
+        benchmark_returns_dict['TopN 1/N'] = topn_series
     
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})
 
@@ -222,4 +280,4 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     final_returns = cumulative_results_df.iloc[-1] - 1
     logger.info("Final cumulative returns: " + ', '.join([f'{idx} {val:.4f}' for idx, val in final_returns.items()]))
     logger.info("[run_backtest] Function exit.")
-    return ff_df, avg_turnover_dict, start_year, end_year
+    return ff_df, avg_turnover, start_year, end_year

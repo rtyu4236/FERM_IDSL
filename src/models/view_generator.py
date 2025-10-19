@@ -1,12 +1,18 @@
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
-# import pmdarima as pm
+try:
+    import pmdarima as pm
+except Exception:
+    pm = None
 from config import settings as config
 from src.utils.logger import logger
 import traceback
 import torch
 from src.models.tcn_svr import TCN_SVR_Model
+
+# Simple in-process cache for warm-starting TCN per permno across months
+_TCN_STATE_CACHE = {}
 
 def train_volatility_model(permno, train_df, feature_cols):
     logger.info(f"[train_volatility_model] Function entry. PERMNO: {permno}")
@@ -19,6 +25,8 @@ def train_volatility_model(permno, train_df, feature_cols):
     
     logger.info(f"[train_volatility_model] y_train shape={y_train.shape}, X_train shape={X_train.shape}")
 
+    if pm is None:
+        raise RuntimeError("pmdarima is not installed; ARIMA-based ML views are disabled.")
     model = pm.auto_arima(y_train, 
                           exogenous=X_train,
                           start_p=0, start_q=0,
@@ -196,14 +204,28 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
 
     indicator_features = ['ATRr_14', 'ADX_14', 'EMA_20', 'MACD_12_26_9', 'SMA_50', 'HURST', 'RSI_14']
     other_features = ['realized_vol', 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 'Mkt-RF', 'SMB', 'HML', 'RF']
-    lag_features = [col for col in full_feature_df.columns if '_lag_' in col]
+    use_lag = model_params.get('use_lag_features', True)
+    max_lag = model_params.get('max_lag_features')
+    lag_features_all = [col for col in full_feature_df.columns if '_lag_' in col]
+    if not use_lag:
+        lag_features = []
+    else:
+        lag_features = lag_features_all
+        if isinstance(max_lag, int) and max_lag > 0 and len(lag_features) > max_lag:
+            # Keep the last N lag features (assumes later-added columns are more recent)
+            lag_features = lag_features[-max_lag:]
     all_features = indicator_features + other_features + lag_features
     logger.info(f"[generate_tcn_svr_views] Defined features: indicator_features len={len(indicator_features)}, other_features len={len(other_features)}, lag_features len={len(lag_features)}, all_features len={len(all_features)}")
+
+    train_window_rows = model_params.get('train_window_rows')
 
     for i, permno in enumerate(permnos):
         logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
         permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
         permno_df = permno_df.dropna(subset=all_features + ['target_return'])
+        # If specified, restrict training rows for speed (use most recent rows)
+        if train_window_rows is not None and len(permno_df) > train_window_rows:
+            permno_df = permno_df.tail(train_window_rows)
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df shape={permno_df.shape}, columns={permno_df.columns.tolist()}")
         
         if len(permno_df) < model_params['lookback_window'] + 1:
@@ -243,12 +265,27 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             svr_gamma=model_params.get('svr_gamma', 'scale'),
             lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
         )
+        # Warm start: load previous TCN weights for this permno if available and compatible
+        if model_params.get('warm_start', True):
+            cached_state = _TCN_STATE_CACHE.get(permno)
+            if cached_state is not None:
+                try:
+                    model.net.load_state_dict(cached_state)
+                    logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} from cache.")
+                except Exception as e:
+                    logger.warning(f"[generate_tcn_svr_views] Warm-start failed for {permno}: {e}")
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
                   epochs=model_params.get('epochs', 50),
                   patience=model_params.get('early_stopping_patience', 10),
                   min_delta=model_params.get('early_stopping_min_delta', 0.0001))
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model fitted.")
+        # Save state dict to cache for next month warm start
+        if model_params.get('warm_start', True):
+            try:
+                _TCN_STATE_CACHE[permno] = model.net.state_dict()
+            except Exception:
+                pass
         
         prediction = model.predict(X_test_tensor)
         predicted_returns[i] = prediction[0]
