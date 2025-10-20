@@ -251,7 +251,10 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
     for i, permno in enumerate(permnos):
         logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
         permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
-        permno_df = permno_df.dropna(subset=all_features + ['target_return'])
+        
+        target_indicator_cols = [f'target_{col}' for col in indicator_features]
+        permno_df = permno_df.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
+
         # If specified, restrict training rows for speed (use most recent rows)
         if train_window_rows is not None and len(permno_df) > train_window_rows:
             permno_df = permno_df.tail(train_window_rows)
@@ -263,7 +266,7 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             continue
 
         X_data = permno_df[all_features].values
-        y_indicators = permno_df[indicator_features].values
+        y_indicators = permno_df[target_indicator_cols].values
         y_returns = permno_df['target_return'].values
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
 
