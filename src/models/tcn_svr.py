@@ -52,6 +52,7 @@ class TCN_SVR_Model:
         logger.info(f"[TCN_SVR_Model.__init__] Sequential network initialized. Type: {type(self.net)}")
         # Move network to device
         self.net.to(self.device)
+        self.use_amp = True # Enable mixed precision if supported
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
         self.criterion = nn.MSELoss()
         self.lookback_window = lookback_window
@@ -71,9 +72,13 @@ class TCN_SVR_Model:
         MIN_SAMPLES_FOR_SPLIT = 5
         can_validate = X_train_tensor.shape[0] >= MIN_SAMPLES_FOR_SPLIT
 
-        # Move training tensors to device
-        X_train_tensor = X_train_tensor.to(self.device)
-        y_train_indicators_tensor = y_train_indicators_tensor.to(self.device)
+        # Move training tensors to device and cast to half precision if AMP is enabled
+        if self.device.type == 'cuda' and self.use_amp:
+            X_train_tensor = X_train_tensor.to(self.device).half()
+            y_train_indicators_tensor = y_train_indicators_tensor.to(self.device).half()
+        else:
+            X_train_tensor = X_train_tensor.to(self.device)
+            y_train_indicators_tensor = y_train_indicators_tensor.to(self.device)
 
         if can_validate:
             X_train_tcn, X_val_tcn, y_train_tcn, y_val_tcn = train_test_split(
@@ -91,15 +96,14 @@ class TCN_SVR_Model:
         best_model_state = None
 
         # 1. Train the TCN model
-        use_amp = True  # enable mixed precision if supported
-        scaler = torch.cuda.amp.GradScaler(enabled=(self.device.type == 'cuda' and use_amp))
+        scaler = torch.cuda.amp.GradScaler(enabled=(self.device.type == 'cuda' and self.use_amp))
 
         for epoch in range(epochs):
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs} - Starting TCN training step.")
             self.net.train()
             self.optimizer.zero_grad()
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Before TCN forward pass. X_train_tcn shape={X_train_tcn.shape}")
-            with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and use_amp)):
+            with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and self.use_amp)):
                 output = self.net(X_train_tcn.permute(0, 2, 1))
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - After TCN forward pass. Output shape={output.shape}")
             loss = self.criterion(output, y_train_tcn)
@@ -112,7 +116,7 @@ class TCN_SVR_Model:
             if can_validate:
                 self.net.eval()
                 with torch.no_grad():
-                    with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and use_amp)):
+                    with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and self.use_amp)):
                         val_output = self.net(X_val_tcn.permute(0, 2, 1))
                     val_loss = self.criterion(val_output, y_val_tcn)
                 
@@ -142,7 +146,7 @@ class TCN_SVR_Model:
         logger.info("[TCN_SVR_Model.fit] TCN training complete. Predicting indicators on training data.")
         self.net.eval()
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and use_amp)):
+            with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and self.use_amp)):
                 predicted_indicators_train_tensor = self.net(X_train_tensor.permute(0, 2, 1))
         
         predicted_indicators_train_numpy = predicted_indicators_train_tensor.detach().cpu().numpy()
@@ -158,8 +162,11 @@ class TCN_SVR_Model:
         
         self.net.eval()
         with torch.no_grad():
-            X_test_tensor = X_test_tensor.to(self.device)
-            with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda')):
+            if self.device.type == 'cuda' and self.use_amp:
+                X_test_tensor = X_test_tensor.to(self.device).half()
+            else:
+                X_test_tensor = X_test_tensor.to(self.device)
+            with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and self.use_amp)):
                 predicted_indicators_test_tensor = self.net(X_test_tensor.permute(0, 2, 1))
             predicted_indicators_test_numpy = predicted_indicators_test_tensor.detach().cpu().numpy()
         logger.info(f"[TCN_SVR_Model.predict] Predicted indicators (test) shape={predicted_indicators_test_numpy.shape}, dtype={predicted_indicators_test_numpy.dtype}")

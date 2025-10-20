@@ -17,7 +17,7 @@ END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 20
+TOP_N_ETFS = 30
 
 # --- Data File Paths ---
 try:
@@ -37,7 +37,7 @@ MODEL_PARAMS = {
     'use_arima': False,
     'arima_params': {
         'lookback_months': 48,
-        'tau': 2.0,
+        'tau': 1.0,
         'view_outperformance': 0.02 / 12,
     },
 
@@ -54,9 +54,9 @@ MODEL_PARAMS = {
         'num_channels_step': 8,
         # Lighter default model for faster monthly training
     # Model strength controls (adjust for heavier training)
-    'num_channels': [48, 48],
+    'num_channels': [32, 64],
     'kernel_size': 3,
-    'dropout': 0.2,
+    'dropout': 0.3,
     'base_uncertainty': 0.05,
     'epochs': 100,
     'lr': 0.001,
@@ -70,14 +70,14 @@ MODEL_PARAMS = {
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
         # Hyperparameter tuning controls
-        'tune_trials_per_month': 5,
+        'tune_trials_per_month': 50,
         # Tune every K months (reduce monthly overhead). 1 = every month
         'tune_every_k_months': 1,
         # Keep modest parallelism to avoid oversubscription on shared machines
         # Use 1 for GPU, or 2~4 for CPU-only environments
         'optuna_n_jobs': 1,
         # Optuna search space parameters
-        'lookback_window_min': 12,
+        'lookback_window_min': 24,
         'num_channels_min': 16,
         'num_channels_max': 64,
         'dropout_min': 0.1,
