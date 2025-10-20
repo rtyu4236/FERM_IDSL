@@ -30,15 +30,38 @@ def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permno
 def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_permnos):
     logger.info(f"[create_one_over_n_benchmark_investable] Function entry. target_dates length: {len(target_dates)}")
     try:
+        # Ensure datetime dtype
+        if 'date' in monthly_df.columns and not pd.api.types.is_datetime64_any_dtype(monthly_df['date']):
+            monthly_df = monthly_df.copy()
+            monthly_df['date'] = pd.to_datetime(monthly_df['date'])
+
         investable_data = monthly_df[monthly_df['permno'].isin(investable_permnos)]
         if investable_data.empty:
             logger.warning("[create_one_over_n_benchmark_investable] Investable data is empty. Returning zero series.")
             return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
-        returns_pivot = investable_data.pivot_table(index='date', columns='permno', values='total_return')
-        available_dates = returns_pivot.index.intersection(target_dates)
-        returns_pivot = returns_pivot.loc[available_dates]
-        one_over_n_returns = [(returns_pivot.loc[date].dropna() * (1.0 / len(returns_pivot.loc[date].dropna()))).sum() if date in returns_pivot.index and not returns_pivot.loc[date].dropna().empty else 0.0 for date in target_dates]
-        logger.info("[create_one_over_n_benchmark_investable] Successfully created 1/N portfolio series.")
+
+        # Pre-sort for "last within month" selection
+        investable_data = investable_data.sort_values(['permno', 'date'])
+
+        one_over_n_returns = []
+        for dt in target_dates:
+            # Exact date first
+            exact = investable_data[investable_data['date'] == dt]
+            candidate = exact
+            if exact.empty:
+                # Fallback: same calendar month period, last available per permno
+                target_period = pd.Timestamp(dt).to_period('M')
+                period_mask = investable_data['date'].dt.to_period('M') == target_period
+                period_df = investable_data[period_mask]
+                if not period_df.empty:
+                    candidate = period_df.groupby('permno', as_index=False).last()
+            if candidate is not None and not candidate.empty:
+                ret = candidate['total_return'].mean()
+            else:
+                ret = 0.0
+            one_over_n_returns.append(ret)
+
+        logger.info("[create_one_over_n_benchmark_investable] Successfully created 1/N portfolio series (with period fallback).")
         return pd.Series(one_over_n_returns, index=target_dates, name='1/N Portfolio')
     except Exception as e:
         logger.error(f"[create_one_over_n_benchmark_investable] Failed to create 1/N portfolio: {e}")
@@ -106,7 +129,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     sig = inspect.signature(run_backtest)
     use_liquid_dict = 'liquid_universe_dict' in sig.parameters
 
-    for analysis_date in backtest_dates[:-1]:
+    for idx, analysis_date in enumerate(backtest_dates[:-1]):
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
 
         # 1) 유동성 필터 전/후 개수 로깅 및 후보군 생성
@@ -202,6 +225,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         else:
             Sigma, delta, W_mkt = bl_portfolio_model._calculate_inputs(returns_pivot, analysis_date)
             if Sigma is None:
+                # Fallback: equal-weight across optimization universe if Sigma cannot be estimated
                 weights = pd.Series(np.ones(len(current_permnos)) / len(current_permnos), index=current_permnos)
             else:
                 P, Q, Omega = ml_view_generator.generate_tcn_svr_views(
@@ -215,9 +239,27 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                     pre_calculated_inputs=(Sigma, delta, W_mkt), max_weight=current_model_params['max_weight'],
                     previous_weights=previous_weights
                 )
+                # BL 최적화 실패 시 분석 대상 유니버스 대상 1/N 투자로 대체
+                if weights is None or weights.empty or not np.isfinite(weights).all() or abs(weights.sum()) < 1e-8:
+                    logger.warning("BL optimization failed or produced invalid weights; using equal-weight fallback across optimization universe.")
+                    weights = pd.Series(np.ones(len(current_permnos)) / len(current_permnos), index=current_permnos)
         
-        next_month_date = analysis_date + pd.offsets.MonthEnd(1)
+        # Use the next backtest date as the next-month evaluation date to better align with available data
+        next_month_date = backtest_dates[idx + 1]
         next_month_returns = monthly_df[monthly_df['date'] == next_month_date]
+        # If exact match fails (calendar vs trading month-end mismatch), fallback to same calendar month period
+        if next_month_returns.empty and 'date' in monthly_df.columns and pd.api.types.is_datetime64_any_dtype(monthly_df['date']):
+            try:
+                target_period = pd.Timestamp(next_month_date).to_period('M')
+                period_mask = monthly_df['date'].dt.to_period('M') == target_period
+                candidate = monthly_df[period_mask]
+                if not candidate.empty:
+                    # Use the last available row within the month per permno
+                    candidate = candidate.sort_values('date').groupby('permno', as_index=False).last()
+                    next_month_returns = candidate
+                    logger.info(f"[Fallback] Using period-based monthly returns for {str(target_period)} due to exact date mismatch.")
+            except Exception:
+                pass
         net_bl_return = 0.0
         raw_bl_return = 0.0
         holding_costs = 0.0
@@ -291,19 +333,33 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         if permno_returns_df.empty:
             logger.warning(f"Benchmark permno {permno} has no data; skipping.")
             continue
-        # 날짜별로 그룹화하여 첫 번째 항목을 사용함으로써 날짜 인덱스의 유일성을 보장합니다.
-        permno_returns_df = permno_returns_df.groupby('date').first().reset_index()
-        permno_returns = permno_returns_df.set_index('date')['total_return']
-        if permno_returns.empty:
-            logger.warning(f"Benchmark permno {permno} returns series is empty after processing; skipping.")
-            continue
-        benchmark_returns_dict[permno] = permno_returns.rename(permno)
-        # Ensure unique index for each benchmark series
-        if not benchmark_returns_dict[permno].index.is_unique:
-            logger.warning(f"Duplicate dates found in benchmark series '{permno}' index. Dropping duplicates.")
-            benchmark_returns_dict[permno] = benchmark_returns_dict[permno][~benchmark_returns_dict[permno].index.duplicated(keep='first')]
-        # Align benchmark to BL backtest dates for fair comparison
-        benchmark_returns_dict[permno] = benchmark_returns_dict[permno].reindex(bl_returns_series.index)
+        # Ensure datetime dtype
+        if not pd.api.types.is_datetime64_any_dtype(permno_returns_df['date']):
+            permno_returns_df = permno_returns_df.copy()
+            permno_returns_df['date'] = pd.to_datetime(permno_returns_df['date'])
+
+        # Sort for last-within-month
+        permno_returns_df = permno_returns_df.sort_values('date')
+
+        # Build series aligned to strategy dates using exact-date-else-period fallback
+        values = []
+        for dt in bl_returns_series.index:
+            exact = permno_returns_df[permno_returns_df['date'] == dt]
+            if exact.empty:
+                target_period = pd.Timestamp(dt).to_period('M')
+                period_mask = permno_returns_df['date'].dt.to_period('M') == target_period
+                period_df = permno_returns_df[period_mask]
+                if not period_df.empty:
+                    # take the last observation in that month
+                    val = period_df.iloc[-1]['total_return']
+                else:
+                    val = np.nan
+            else:
+                val = exact.iloc[-1]['total_return']
+            values.append(val)
+
+        bench_series = pd.Series(values, index=bl_returns_series.index, name=str(permno))
+        benchmark_returns_dict[permno] = bench_series
     
     # Overall 1/N benchmark across all investable permnos (unconditional)
     one_over_n_returns = create_one_over_n_benchmark_investable(monthly_df, bl_returns_series.index, all_permnos)

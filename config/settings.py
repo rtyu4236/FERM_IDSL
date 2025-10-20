@@ -17,7 +17,7 @@ END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 15
+TOP_N_ETFS = 20
 
 # --- Data File Paths ---
 try:
@@ -42,7 +42,7 @@ MODEL_PARAMS = {
     },
 
     # ETF Ranking Parameters
-    'ranking_lookback_years': 2,  # Only use last N years for ranking features (None for all)
+    'ranking_lookback_years': 3,  # Only use last N years for ranking features (None for all)
     'ranking_cache': True,        # Enable disk cache for monthly ranking results
 
     # TCN-SVR Model Parameters
@@ -58,7 +58,7 @@ MODEL_PARAMS = {
     'kernel_size': 3,
     'dropout': 0.2,
     'base_uncertainty': 0.05,
-    'epochs': 40,
+    'epochs': 100,
     'lr': 0.001,
     'early_stopping_patience': 8,
         'early_stopping_min_delta': 0.0001,

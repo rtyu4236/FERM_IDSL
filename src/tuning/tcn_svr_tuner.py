@@ -142,7 +142,7 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
     pruner = MedianPruner(n_startup_trials=max(5, n_trials // 3), n_warmup_steps=0)
-    study = optuna.create_study(direction="minimize", pruner=pruner)
+    study = optuna.create_study(direction="minimize", pruner=pruner, sampler=optuna.samplers.TPESampler())
     study.optimize(objective, n_trials=n_trials, n_jobs=config.MODEL_PARAMS['tcn_svr_params']['optuna_n_jobs'])
 
     logger.info("Tuning finished.")
