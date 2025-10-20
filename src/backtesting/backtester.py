@@ -106,11 +106,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     sig = inspect.signature(run_backtest)
     use_liquid_dict = 'liquid_universe_dict' in sig.parameters
 
-    cnt=0
     for analysis_date in backtest_dates[:-1]:
-        cnt += 1
-        if cnt == 3:
-            break
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
 
         # 1) 유동성 필터 전/후 개수 로깅 및 후보군 생성
