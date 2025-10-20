@@ -12,12 +12,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2004
+START_YEAR = 2024
 END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 30
+TOP_N_ETFS = 3
 
 # --- Data File Paths ---
 try:
@@ -48,7 +48,7 @@ MODEL_PARAMS = {
     # TCN-SVR Model Parameters
     'use_tcn_svr': True,
     'tcn_svr_params': {
-        'tau': 0.025,
+        'tau': 1.0,
         'lookback_window': 48,
         'lookback_window_step': 6,
         'num_channels_step': 8,
@@ -60,7 +60,7 @@ MODEL_PARAMS = {
     'base_uncertainty': 0.05,
     'epochs': 100,
     'lr': 0.001,
-    'early_stopping_patience': 8,
+    'early_stopping_patience': 12,
         'early_stopping_min_delta': 0.0001,
         # Limit how much history to use for training per permno in daily rows (None = all)
         'train_window_rows': 720,
@@ -70,7 +70,7 @@ MODEL_PARAMS = {
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
         # Hyperparameter tuning controls
-        'tune_trials_per_month': 50,
+        'tune_trials_per_month': 5,
         # Tune every K months (reduce monthly overhead). 1 = every month
         'tune_every_k_months': 1,
         # Keep modest parallelism to avoid oversubscription on shared machines
