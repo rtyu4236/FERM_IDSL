@@ -72,7 +72,25 @@ if __name__ == '__main__':
     )
     logger_setup.logger.info("backtester.run_backtest completed.")
 
-    # 4. Visualize results
+    # 4. Generate performance reports (summary + yearly returns)
+    logger_setup.logger.info("\nGenerating performance reports...")
+    try:
+        cumulative_returns_path = os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME, 'cumulative_returns.csv')
+        cumulative_df = pd.read_csv(cumulative_returns_path, index_col=0, parse_dates=True)
+        
+        from src.visualization.reports import generate_performance_reports
+        perf_summary_df, yearly_df = generate_performance_reports(
+            cumulative_results_df=cumulative_df,
+            output_dir=os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME),
+            risk_free_rate=0.02
+        )
+        logger_setup.logger.info("Performance reports generated successfully.")
+        logger_setup.logger.info(f"Performance Summary:\n{perf_summary_df.to_string()}")
+        logger_setup.logger.info(f"Yearly Returns:\n{yearly_df.to_string()}")
+    except Exception as e:
+        logger_setup.logger.error(f"Failed to generate performance reports: {e}")
+
+    # 5. Visualize results
     logger_setup.logger.info("\nResult visualization started.")
     try:
         cumulative_returns_path = os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME, 'cumulative_returns.csv')
@@ -90,9 +108,37 @@ if __name__ == '__main__':
         logger_setup.logger.info("--- End of Data for Visualization ---")
 
         run_visualization(cumulative_df, ff_df_from_backtest, avg_turnover_dict, start_year_backtest, end_year_backtest)
-    except FileNotFoundError:
-        logger_setup.logger.error(f"Visualization error: 'cumulative_returns.csv' file not found.")
     except Exception as e:
-        logger_setup.logger.error(f"Visualization error: {e}")
+        # Fallback: try loading saved artifacts and recompute cumulative if necessary
+        logger_setup.logger.error(f"Visualization error, attempting fallback to saved artifacts: {e}")
+        try:
+            out_dir = os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME)
+            monthly_path = os.path.join(out_dir, 'monthly_returns.csv')
+            ff_path = os.path.join(out_dir, 'fama_french_factors.csv')
+            avg_turnover_path = os.path.join(out_dir, 'avg_turnover.json')
+
+            monthly_df = pd.read_csv(monthly_path, index_col=0, parse_dates=True)
+            cumulative_df = (1 + monthly_df).cumprod()
+
+            # Prefer saved FF if available; otherwise, use the in-memory one
+            if os.path.exists(ff_path):
+                ff_loaded = pd.read_csv(ff_path, parse_dates=['date'])
+            else:
+                ff_loaded = ff_df_from_backtest.copy()
+
+            # Load avg turnover
+            if os.path.exists(avg_turnover_path):
+                with open(avg_turnover_path, 'r') as f:
+                    avg_turnover_dict = json.load(f)
+                # Ensure keys match visualization naming (already 'BL_ML_Strategy' was saved, map to 'TCN-SVR')
+                if 'BL_ML_Strategy' in avg_turnover_dict:
+                    avg_turnover_dict = {'TCN-SVR': avg_turnover_dict['BL_ML_Strategy']}
+            else:
+                avg_turnover_dict = {'TCN-SVR': avg_turnover}
+
+            from src.visualization.plot import run_visualization
+            run_visualization(cumulative_df, ff_loaded, avg_turnover_dict, start_year_backtest, end_year_backtest)
+        except Exception as e2:
+            logger_setup.logger.error(f"Fallback visualization also failed: {e2}")
     logger_setup.logger.info("Result visualization completed.")
     logger_setup.logger.info("main.py execution finished.")

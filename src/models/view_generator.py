@@ -11,8 +11,37 @@ import traceback
 import torch
 from src.models.tcn_svr import TCN_SVR_Model
 
-# Simple in-process cache for warm-starting TCN per permno across months
+# In-process cache for warm-starting TCN per permno across months.
+# Structure: { permno: { signature_tuple: state_dict } }
 _TCN_STATE_CACHE = {}
+
+def clear_tcn_cache():
+    """Clear the warm start cache. Useful when architecture changes or to reset state."""
+    global _TCN_STATE_CACHE
+    _TCN_STATE_CACHE.clear()
+    logger.info("[clear_tcn_cache] Warm start cache cleared.")
+
+def _tcn_signature(input_size, output_size, num_channels, kernel_size, lookback_window):
+    """Return a tuple that uniquely describes the TCN architecture for warm start."""
+    return (
+        int(input_size),
+        int(output_size),
+        tuple(int(c) for c in (num_channels or [])),
+        int(kernel_size),
+        int(lookback_window),
+    )
+
+def _filter_compatible_state(model, cached_state):
+    """Return a filtered state_dict containing only keys with matching shapes."""
+    try:
+        model_state = model.net.state_dict()
+    except Exception:
+        return None
+    compatible = {}
+    for k, v in cached_state.items():
+        if k in model_state and hasattr(v, 'shape') and getattr(model_state[k], 'shape', None) == v.shape:
+            compatible[k] = v
+    return compatible if compatible else None
 
 def train_volatility_model(permno, train_df, feature_cols):
     logger.info(f"[train_volatility_model] Function entry. PERMNO: {permno}")
@@ -265,25 +294,65 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             svr_gamma=model_params.get('svr_gamma', 'scale'),
             lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
         )
-        # Warm start: load previous TCN weights for this permno if available and compatible
+        # Warm start: load previous TCN weights for this permno if architecture matches; else skip.
         if model_params.get('warm_start', True):
-            cached_state = _TCN_STATE_CACHE.get(permno)
-            if cached_state is not None:
-                try:
-                    model.net.load_state_dict(cached_state)
-                    logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} from cache.")
-                except Exception as e:
-                    logger.warning(f"[generate_tcn_svr_views] Warm-start failed for {permno}: {e}")
+            sig = _tcn_signature(
+                input_size=len(all_features),
+                output_size=len(indicator_features),
+                num_channels=model_params['num_channels'],
+                kernel_size=model_params['kernel_size'],
+                lookback_window=model_params['lookback_window'],
+            )
+            cached_for_permno = _TCN_STATE_CACHE.get(permno)
+            loaded = False
+            if isinstance(cached_for_permno, dict):
+                # New-style cache: keyed by signature
+                cached_state = cached_for_permno.get(sig)
+                if cached_state is not None:
+                    compat = _filter_compatible_state(model, cached_state)
+                    if compat:
+                        try:
+                            model.net.load_state_dict(compat, strict=False)
+                            loaded = True
+                            logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} with matching signature.")
+                        except Exception as e:
+                            logger.warning(f"[generate_tcn_svr_views] Warm-start load failed for {permno} despite signature match: {e}")
+            else:
+                # Backward-compat: older cache stored raw state_dict directly.
+                cached_state = cached_for_permno
+                if cached_state is not None:
+                    compat = _filter_compatible_state(model, cached_state)
+                    if compat:
+                        try:
+                            model.net.load_state_dict(compat, strict=False)
+                            loaded = True
+                            logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} (compat keys only).")
+                        except Exception as e:
+                            logger.warning(f"[generate_tcn_svr_views] Warm-start (compat) failed for {permno}: {e}")
+            if not loaded:
+                logger.info(f"[generate_tcn_svr_views] Skipping warm-start for {permno} (no compatible cached weights for current architecture).")
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
                   epochs=model_params.get('epochs', 50),
                   patience=model_params.get('early_stopping_patience', 10),
                   min_delta=model_params.get('early_stopping_min_delta', 0.0001))
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model fitted.")
-        # Save state dict to cache for next month warm start
+        # Save state dict to cache for next month warm start (keyed by architecture signature)
         if model_params.get('warm_start', True):
             try:
-                _TCN_STATE_CACHE[permno] = model.net.state_dict()
+                sig = _tcn_signature(
+                    input_size=len(all_features),
+                    output_size=len(indicator_features),
+                    num_channels=model_params['num_channels'],
+                    kernel_size=model_params['kernel_size'],
+                    lookback_window=model_params['lookback_window'],
+                )
+                cache_bucket = _TCN_STATE_CACHE.setdefault(permno, {})
+                if isinstance(cache_bucket, dict):
+                    cache_bucket[sig] = model.net.state_dict()
+                else:
+                    # If stale format exists, replace with new dict format
+                    _TCN_STATE_CACHE[permno] = {sig: model.net.state_dict()}
             except Exception:
                 pass
         

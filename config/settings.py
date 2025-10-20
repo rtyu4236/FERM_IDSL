@@ -42,7 +42,7 @@ MODEL_PARAMS = {
     },
 
     # ETF Ranking Parameters
-    'ranking_lookback_years': 5,  # Only use last N years for ranking features (None for all)
+    'ranking_lookback_years': 2,  # Only use last N years for ranking features (None for all)
     'ranking_cache': True,        # Enable disk cache for monthly ranking results
 
     # TCN-SVR Model Parameters
@@ -70,9 +70,9 @@ MODEL_PARAMS = {
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
         # Hyperparameter tuning controls
-        'tune_trials_per_month': 15,
+        'tune_trials_per_month': 5,
         # Tune every K months (reduce monthly overhead). 1 = every month
-        'tune_every_k_months': 3,
+        'tune_every_k_months': 1,
         # Keep modest parallelism to avoid oversubscription on shared machines
         # Use 1 for GPU, or 2~4 for CPU-only environments
         'optuna_n_jobs': 1,

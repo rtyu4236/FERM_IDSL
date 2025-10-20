@@ -140,7 +140,14 @@ class ETFQuantRanker:
             
             models = {
                 'lr': LogisticRegression(random_state=RANDOM_SEED, max_iter=30, n_jobs=1),
-                'rf': RandomForestClassifier(random_state=RANDOM_SEED, n_estimators=30, max_depth=15, min_samples_leaf=10, n_jobs=1)
+                'rf': RandomForestClassifier(
+                    random_state=RANDOM_SEED,
+                    n_estimators=24,        
+                    max_depth=12,           
+                    min_samples_leaf=10,
+                    max_features='sqrt',   
+                    n_jobs=-1              
+                )
             }
             
             ml_scores_df = pd.DataFrame(index=predict_df.index)

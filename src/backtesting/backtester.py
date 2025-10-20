@@ -49,6 +49,11 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     logger.info("[run_backtest] Function entry.")
     qs.extend_pandas()
 
+    # Clear TCN warm start cache at the beginning of each backtest run
+    if model_params.get('use_tcn_svr', False) and model_params.get('tcn_svr_params', {}).get('warm_start', False):
+        logger.info("Clearing TCN warm start cache to ensure clean state...")
+        ml_view_generator.clear_tcn_cache()
+
     ml_features_df = data_manager.create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df)
     logger.info(f"[run_backtest] ML features created: ml_features_df shape={ml_features_df.shape}")
 
@@ -78,7 +83,8 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                 break
         if current_date:
             backtest_dates.append(current_date)
-    backtest_dates = pd.DatetimeIndex(backtest_dates).unique()
+    # Ensure chronological order of backtest dates
+    backtest_dates = pd.DatetimeIndex(backtest_dates).unique().sort_values()
     
     logger.info(f"[run_backtest] Backtest dates range: {backtest_dates.min()} to {backtest_dates.max()}, total {len(backtest_dates)} dates.")
     
@@ -88,26 +94,51 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     avg_turnover_dict = {'BL_ML_Strategy': 0.0} # Initialize with a default value
     monthly_turnovers = [] # 월별 회전율을 저장할 리스트 추가
 
+    # For detailed exports
+    weights_records = []  # [{'as_of': date, 'next_month': date, 'permno': int, 'weight': float}]
+    month_stats_records = []  # [{'as_of': date, 'next_month': date, 'raw_bl_return': float, 'holding_costs': float, 'trade_cost': float, 'net_bl_return': float, 'turnover': float}]
+    universe_per_month = {}  # {date_str: [permnos]}
+    liquidity_log_records = []  # [{'as_of': date, 'before_count': int, 'after_count': int}]
+    ranking_selected_per_month = {} if use_etf_ranking else None
+
     # liquid_universe_dict 인자 지원
     import inspect
     sig = inspect.signature(run_backtest)
     use_liquid_dict = 'liquid_universe_dict' in sig.parameters
 
+    cnt=0
     for analysis_date in backtest_dates[:-1]:
+        cnt += 1
+        if cnt == 3:
+            break
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
 
         # 1) 유동성 필터 전/후 개수 로깅 및 후보군 생성
         pre_liq_count = len(all_permnos)
         if liquid_universe_dict is not None:
-            key = analysis_date
-            if key not in liquid_universe_dict:
-                # 월말이 없으면 가장 가까운 과거 월말 사용
-                key = max([d for d in liquid_universe_dict.keys() if d <= analysis_date])
+            # Align analysis_date to its month-end to match dict keys and handle edge cases safely
+            month_end_key = (pd.Timestamp(analysis_date) + pd.offsets.MonthEnd(0)).normalize()
+            available_keys = sorted(liquid_universe_dict.keys())
+            if month_end_key in liquid_universe_dict:
+                key = month_end_key
+            else:
+                # Find the latest available key not after month_end_key; if none, fall back to earliest key
+                prior_keys = [d for d in available_keys if d <= month_end_key]
+                if prior_keys:
+                    key = prior_keys[-1]
+                else:
+                    # analysis_date precedes the first available liquidity snapshot; use the earliest
+                    key = available_keys[0]
             candidate_permnos = liquid_universe_dict.get(key, all_permnos)
         else:
             candidate_permnos = all_permnos
         after_liq_count = len(candidate_permnos)
         logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Liquidity filter: before={pre_liq_count}, after={after_liq_count}")
+        liquidity_log_records.append({
+            'as_of': analysis_date.normalize(),
+            'before_count': int(pre_liq_count),
+            'after_count': int(after_liq_count)
+        })
 
         # 2) 랭킹 적용 및 리스트 로깅
         if use_etf_ranking and ranker:
@@ -117,14 +148,27 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                 ranked_permnos = ranker.get_top_permnos(str(analysis_date.date()), daily_df, candidate_permnos, top_n=top_n)
             logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Rank selected ({len(ranked_permnos)}): {ranked_permnos}")
             universe_for_month = ranked_permnos
+            # save monthly ranking selection
+            try:
+                ranking_selected_per_month[analysis_date.strftime('%Y-%m-%d')] = list(map(int, ranked_permnos))
+            except Exception:
+                ranking_selected_per_month[analysis_date.strftime('%Y-%m-%d')] = ranked_permnos
         else:
             universe_for_month = candidate_permnos
             logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Ranking disabled. Using candidate universe ({len(universe_for_month)}).")
+        # Save selected universe for this month (as_of analysis_date)
+        try:
+            universe_per_month[analysis_date.strftime('%Y-%m-%d')] = list(map(int, universe_for_month))
+        except Exception:
+            universe_per_month[analysis_date.strftime('%Y-%m-%d')] = universe_for_month
+
 
         if not universe_for_month:
             logger.warning(f"Universe for {analysis_date.strftime('%Y-%m')} is empty. Skipping month.")
             bl_returns.append(pd.Series([0.0], index=[analysis_date + pd.offsets.MonthEnd(1)]))
             continue
+
+       
 
         # Check tuning cadence (every K months)
         tune_every_k = model_params.get('tcn_svr_params', {}).get('tune_every_k_months', 1)
@@ -179,6 +223,10 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         next_month_date = analysis_date + pd.offsets.MonthEnd(1)
         next_month_returns = monthly_df[monthly_df['date'] == next_month_date]
         net_bl_return = 0.0
+        raw_bl_return = 0.0
+        holding_costs = 0.0
+        trade_cost = 0.0
+        turnover = 0.0
         if not next_month_returns.empty and weights is not None and not weights.empty:
             logger.info(f"[DEBUG] next_month_returns head:\n{next_month_returns.head().to_string()}")
             logger.info(f"[DEBUG] weights head:\n{weights.head().to_string()}")
@@ -191,9 +239,28 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
             net_bl_return = raw_bl_return - holding_costs - trade_cost
             logger.info(f"[DEBUG] net_bl_return: {net_bl_return}")
-
             turnover = np.abs(aligned_new - aligned_prev).sum() / 2
             monthly_turnovers.append(turnover)
+
+            # Save weights detailed records
+            for permno_idx, w in aligned_new.items():
+                weights_records.append({
+                    'as_of': analysis_date.normalize(),
+                    'next_month': next_month_date.normalize(),
+                    'permno': int(permno_idx) if isinstance(permno_idx, (int, np.integer)) else permno_idx,
+                    'weight': float(w)
+                })
+
+        # Save per-month stats regardless
+        month_stats_records.append({
+            'as_of': analysis_date.normalize(),
+            'next_month': next_month_date.normalize(),
+            'raw_bl_return': float(raw_bl_return) if pd.notnull(raw_bl_return) else 0.0,
+            'holding_costs': float(holding_costs) if pd.notnull(holding_costs) else 0.0,
+            'trade_cost': float(trade_cost) if pd.notnull(trade_cost) else 0.0,
+            'net_bl_return': float(net_bl_return) if pd.notnull(net_bl_return) else 0.0,
+            'turnover': float(turnover) if pd.notnull(turnover) else 0.0
+        })
 
         bl_returns.append(pd.Series([net_bl_return], index=[next_month_date]))
         previous_weights = weights
@@ -276,6 +343,62 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     cum_results_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'cumulative_returns.csv')
     cumulative_results_df.to_csv(cum_results_path)
     logger.info(f"Cumulative returns data saved successfully: {cum_results_path}")
+
+    # Save additional artifacts for robust downstream usage
+    out_dir = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
+    try:
+        # Monthly returns for all strategies
+        monthly_returns_path = os.path.join(out_dir, 'monthly_returns.csv')
+        results_df.to_csv(monthly_returns_path)
+        logger.info(f"Monthly returns saved: {monthly_returns_path}")
+
+        # Weights by month and permno
+        if weights_records:
+            weights_df = pd.DataFrame(weights_records)
+            weights_df.to_csv(os.path.join(out_dir, 'weights.csv'), index=False)
+            logger.info("Weights by month saved.")
+        else:
+            logger.info("No weights records to save (empty portfolio months).")
+
+        # Costs and turnover per month
+        stats_df = pd.DataFrame(month_stats_records)
+        stats_df.to_csv(os.path.join(out_dir, 'per_month_stats.csv'), index=False)
+        logger.info("Per-month stats saved.")
+
+        # Universe per month
+        with open(os.path.join(out_dir, 'universe_per_month.json'), 'w') as f:
+            json.dump(universe_per_month, f)
+        logger.info("Universe per month saved.")
+
+        # Liquidity before/after per month
+        pd.DataFrame(liquidity_log_records).to_csv(os.path.join(out_dir, 'liquidity_log.csv'), index=False)
+        logger.info("Liquidity log saved.")
+
+        # Ranking selection per month (if applicable)
+        if ranking_selected_per_month is not None:
+            with open(os.path.join(out_dir, 'ranking_selected_per_month.json'), 'w') as f:
+                json.dump(ranking_selected_per_month, f)
+            logger.info("Ranking selections per month saved.")
+
+        # Save FF factors used for plotting
+        ff_out = ff_df.copy()
+        ff_out.to_csv(os.path.join(out_dir, 'fama_french_factors.csv'), index=False)
+
+        # Avg turnover and metadata
+        with open(os.path.join(out_dir, 'avg_turnover.json'), 'w') as f:
+            json.dump({'BL_ML_Strategy': avg_turnover}, f)
+        meta = {
+            'start_year': start_year,
+            'end_year': end_year,
+            'use_etf_ranking': use_etf_ranking,
+            'top_n': top_n,
+            'log_name': logger.LOG_NAME
+        }
+        with open(os.path.join(out_dir, 'metadata.json'), 'w') as f:
+            json.dump(meta, f)
+        logger.info("Metadata saved.")
+    except Exception as e:
+        logger.error(f"Failed to save detailed artifacts: {e}")
     
     final_returns = cumulative_results_df.iloc[-1] - 1
     logger.info("Final cumulative returns: " + ', '.join([f'{idx} {val:.4f}' for idx, val in final_returns.items()]))
