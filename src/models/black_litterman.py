@@ -197,7 +197,7 @@ class BlackLittermanPortfolio:
         mu_bl_arr = np.asarray(mu_bl, dtype=float)
         expenses_arr = np.asarray(expenses_aligned.values, dtype=float)
 
-        mu_bl_net = mu_bl_arr - expenses_arr # Subtract the values of the aligned Series
+        mu_bl_net = mu_bl_arr - (expenses_arr / 12.0)
         n = len(current_permnos)
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] mu_bl_net shape={mu_bl_net.shape}, n={n}")
 
