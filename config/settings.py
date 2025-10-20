@@ -54,7 +54,7 @@ MODEL_PARAMS = {
         'num_channels_step': 8,
         # Lighter default model for faster monthly training
     # Model strength controls (adjust for heavier training)
-    'num_channels': [32, 32],
+    'num_channels': [48, 48],
     'kernel_size': 3,
     'dropout': 0.2,
     'base_uncertainty': 0.05,
