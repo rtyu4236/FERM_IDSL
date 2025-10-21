@@ -12,6 +12,11 @@ from src.utils.logger import logger
 from src.tuning import tcn_svr_tuner
 from src.models.etf_quant_ranker import ETFQuantRanker, create_etf_universe_from_daily
 
+def apply_costs_to_returns(returns, permno, filtered_costs):
+    """Apply realistic costs to benchmark returns for fair comparison"""
+    expense_ratio = filtered_costs.get(permno, {}).get('expense_ratio', 0) / 12  # Monthly expense ratio
+    return returns - expense_ratio
+
 def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permnos):
     logger.info(f"[_filter_config_by_permnos] Filtering configs for {len(all_available_permnos)} permnos.")
     available_set = set(all_available_permnos)
@@ -273,8 +278,10 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             raw_bl_return = (merged_bl['weight'] * merged_bl['total_return']).sum()
             logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
             holding_costs = (merged_bl['weight'] * merged_bl['permno'].map(lambda p: filtered_costs.get(p, {}).get('expense_ratio', 0) / 12)).sum()
+            
             aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
-            trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
+            position_changes = np.abs(aligned_new - aligned_prev)
+            trade_cost = (position_changes * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
             net_bl_return = raw_bl_return - holding_costs - trade_cost
             logger.info(f"[DEBUG] net_bl_return: {net_bl_return}")
             turnover = np.abs(aligned_new - aligned_prev).sum() / 2
@@ -358,7 +365,9 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                 val = exact.iloc[-1]['total_return']
             values.append(val)
 
-        bench_series = pd.Series(values, index=bl_returns_series.index, name=str(permno))
+        # Apply costs to benchmark returns for fair comparison
+        values_with_costs = [apply_costs_to_returns(val, permno, filtered_costs) if not pd.isna(val) else np.nan for val in values]
+        bench_series = pd.Series(values_with_costs, index=bl_returns_series.index, name=str(permno))
         benchmark_returns_dict[permno] = bench_series
     
     # Overall 1/N benchmark across all investable permnos (unconditional)
@@ -368,14 +377,31 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         if not one_over_n_returns.index.is_unique:
             logger.warning("Duplicate dates found in '1/N Portfolio' series index. Dropping duplicates.")
             one_over_n_returns = one_over_n_returns[~one_over_n_returns.index.duplicated(keep='first')]
-        benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
+        
+        avg_expense_ratio = np.mean([filtered_costs.get(p, {}).get('expense_ratio', 0) for p in all_permnos if p in filtered_costs])
+        one_over_n_returns_with_costs = one_over_n_returns - (avg_expense_ratio / 12)
+        benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns_with_costs
 
     # Include TopN 1/N benchmark if created
     if use_etf_ranking and topn_equal_weight_returns is not None and len(topn_equal_weight_returns) > 0:
         topn_series = pd.concat(topn_equal_weight_returns).sort_index().squeeze().rename('TopN 1/N')
         # Align to strategy dates just in case
         topn_series = topn_series.reindex(bl_returns_series.index, fill_value=0.0)
-        benchmark_returns_dict['TopN 1/N'] = topn_series
+        
+        # Apply costs to TopN 1/N benchmark for fair comparison
+        # Calculate average expense ratio for the selected universe (this is approximate)
+        if hasattr(ranker, 'get_top_permnos') and universe_per_month:
+            # Get average costs from the most recent universe selection
+            recent_universe = list(universe_per_month.values())[-1] if universe_per_month else []
+            if recent_universe:
+                avg_topn_expense_ratio = np.mean([filtered_costs.get(p, {}).get('expense_ratio', 0) for p in recent_universe if p in filtered_costs])
+                topn_series_with_costs = topn_series - (avg_topn_expense_ratio / 12)
+            else:
+                topn_series_with_costs = topn_series
+        else:
+            topn_series_with_costs = topn_series
+        
+        benchmark_returns_dict['TopN 1/N'] = topn_series_with_costs
     
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})
 

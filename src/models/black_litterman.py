@@ -182,22 +182,20 @@ class BlackLittermanPortfolio:
             mu_bl = Pi
             logger.info("No ML views provided, using equilibrium returns.")
             
-        expenses = np.array([self.expense_ratios.get(permno, {}).get('expense_ratio', 0) for permno in current_permnos])
-        # Subtract expenses from expected returns
-        expenses_series = pd.Series(expenses, index=current_permnos) # Create Series with permno index
-        expenses_aligned = expenses_series.reindex(current_permnos).fillna(0) # Reindex with current_permnos
+        # 비용 차감을 제거 - 실제 수익률 계산에서만 비용을 차감하도록 변경
+        # expenses = np.array([self.expense_ratios.get(permno, {}).get('expense_ratio', 0) for permno in current_permnos])
+        # expenses_series = pd.Series(expenses, index=current_permnos)
+        # expenses_aligned = expenses_series.reindex(current_permnos).fillna(0)
         
-        logger.info(f"Expenses array: {expenses}")
-        logger.info(f"Expenses aligned values: {expenses_aligned.values}")
-
+        logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Using gross expected returns (costs will be deducted during actual return calculation)")
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Before explicit conversion: mu_bl type={type(mu_bl)}, mu_bl shape={getattr(mu_bl, 'shape', 'N/A')}")
-        logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Before explicit conversion: expenses_aligned.values type={type(expenses_aligned.values)}, expenses_aligned.values shape={expenses_aligned.values.shape}")
 
-        # Ensure both operands are numpy arrays of float type
+        # Ensure mu_bl is numpy array of float type
         mu_bl_arr = np.asarray(mu_bl, dtype=float)
-        expenses_arr = np.asarray(expenses_aligned.values, dtype=float)
+        # expenses_arr = np.asarray(expenses_aligned.values, dtype=float)
 
-        mu_bl_net = mu_bl_arr - (expenses_arr / 12.0)
+        mu_bl_net = mu_bl_arr  # 비용을 차감하지 않음
+        # mu_bl_net = mu_bl_arr - (expenses_arr / 12.0)
         n = len(current_permnos)
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] mu_bl_net shape={mu_bl_net.shape}, n={n}")
 
