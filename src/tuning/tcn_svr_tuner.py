@@ -1,4 +1,5 @@
 import optuna
+from optuna.pruners import MedianPruner
 import torch
 import numpy as np
 import pandas as pd
@@ -80,15 +81,19 @@ class TCN_SVR_Objective:
             logger.warning("Tuning data is empty.")
             return float('inf')
 
-        target_ticker = 'SPY'
-        if target_ticker not in tuning_df['ticker'].unique():
-            target_ticker = tuning_df['ticker'].unique()[0]
-        
-        ticker_df = tuning_df[tuning_df['ticker'] == target_ticker].copy()
+        # Choose a target permno that has sufficient data; prefer SPY (84398) if present
+        preferred_permno = 84398
+        permnos_with_data = tuning_df['permno'].dropna().unique().tolist()
+        target_permno = preferred_permno if preferred_permno in permnos_with_data else (permnos_with_data[0] if permnos_with_data else None)
+        if target_permno is None:
+            logger.warning("No permno available for tuning.")
+            return float('inf')
+
+        ticker_df = tuning_df[tuning_df['permno'] == target_permno].copy()
         ticker_df = ticker_df.dropna(subset=self.all_features + ['target_return'])
 
         if len(ticker_df) < tcn_lookback_window + 1:
-            logger.warning(f"Not enough data for {target_ticker} to tune with lookback {tcn_lookback_window}.")
+            logger.warning(f"Not enough data for {target_permno} to tune with lookback {tcn_lookback_window}.")
             return float('inf')
 
         X_data = ticker_df[self.all_features].values
@@ -116,13 +121,19 @@ class TCN_SVR_Objective:
         )
         model.optimizer = torch.optim.Adam(model.net.parameters(), lr=tcn_lr)
 
-        logger.info(f"[TCN_SVR_Objective] Starting model.fit() for trial {trial.number} with permno {target_ticker}.")
-        model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
-                  epochs=tcn_epochs,
-                  patience=self.config_model_params['tcn_svr_params']['early_stopping_patience'],
-                  min_delta=self.config_model_params['tcn_svr_params']['early_stopping_min_delta'])
-        logger.info(f"[TCN_SVR_Objective] model.fit() completed for trial {trial.number} with permno {target_ticker}.")
-        
+        logger.info(f"[TCN_SVR_Objective] Starting model.fit() for trial {trial.number} with permno {target_permno}.")
+        # Fit the model; we cannot prune inside the model easily without passing the trial,
+        # so we rely on final validation loss for pruning decisions at the study level.
+        model.fit(
+            X_train_tensor,
+            y_train_indicators_tensor,
+            y_train_returns_seq,
+            epochs=tcn_epochs,
+            patience=self.config_model_params['tcn_svr_params']['early_stopping_patience'],
+            min_delta=self.config_model_params['tcn_svr_params']['early_stopping_min_delta']
+        )
+        logger.info(f"[TCN_SVR_Objective] model.fit() completed for trial {trial.number} with permno {target_permno}.")
+
         final_val_loss = model.best_loss
         return final_val_loss
 
@@ -130,30 +141,8 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
-    study = optuna.create_study(direction="minimize")
-    
-    # Warm-start Optuna with parameters from the previous month's best trial, if available
-    best_params_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')
-    if os.path.exists(best_params_path):
-        try:
-            with open(best_params_path, 'r') as f:
-                previous_best_params = json.load(f)
-            
-            # Prepare parameters for enqueuing
-            enqueued_params = {
-                'lookback_window': previous_best_params.get('lookback_window'),
-                'num_channels_layer1': previous_best_params.get('num_channels')[0],
-                'num_channels_layer2': previous_best_params.get('num_channels')[1],
-                'dropout': previous_best_params.get('dropout'),
-                'svr_C': previous_best_params.get('svr_C'),
-                'svr_gamma': previous_best_params.get('svr_gamma'),
-            }
-            # Enqueue the previous best trial
-            study.enqueue_trial(enqueued_params)
-            logger.info(f"Warm-started Optuna study with previous best parameters: {enqueued_params}")
-        except Exception as e:
-            logger.warning(f"Failed to warm-start Optuna study: {e}")
-    
+    pruner = MedianPruner(n_startup_trials=max(5, n_trials // 3), n_warmup_steps=0)
+    study = optuna.create_study(direction="minimize", pruner=pruner, sampler=optuna.samplers.TPESampler())
     study.optimize(objective, n_trials=n_trials, n_jobs=config.MODEL_PARAMS['tcn_svr_params']['optuna_n_jobs'])
 
     logger.info("Tuning finished.")
@@ -163,14 +152,14 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
 
     best_params = study.best_params
     tcn_params = {
-        'lookback_window': best_params.get('lookback_window'),
-        'num_channels': [best_params.get('num_channels_layer1'), best_params.get('num_channels_layer2')],
-        'kernel_size': best_params.get('kernel_size'),
-        'dropout': best_params.get('dropout'),
-        'epochs': best_params.get('epochs'),
-        'lr': best_params.get('lr'),
-        'svr_C': best_params.get('svr_C'),
-        'svr_gamma': best_params.get('svr_gamma'),
+        'lookback_window': best_params.get('lookback_window', config.MODEL_PARAMS['tcn_svr_params']['lookback_window']),
+        'num_channels': [best_params.get('num_channels_layer1', config.MODEL_PARAMS['tcn_svr_params']['num_channels'][0]), best_params.get('num_channels_layer2', config.MODEL_PARAMS['tcn_svr_params']['num_channels'][1])],
+        'kernel_size': config.MODEL_PARAMS['tcn_svr_params']['kernel_size'],
+        'dropout': best_params.get('dropout', config.MODEL_PARAMS['tcn_svr_params']['dropout']),
+        'epochs': config.MODEL_PARAMS['tcn_svr_params']['epochs'],
+        'lr': config.MODEL_PARAMS['tcn_svr_params']['lr'],
+        'svr_C': best_params.get('svr_C', config.MODEL_PARAMS['tcn_svr_params'].get('svr_C_min', 1.0)),
+        'svr_gamma': best_params.get('svr_gamma', config.MODEL_PARAMS['tcn_svr_params'].get('svr_gamma_min', 0.01)),
     }
 
     output_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')

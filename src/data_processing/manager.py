@@ -155,31 +155,38 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     logger.info("Feature dataset creation complete.")
     return final_df
 
-def filter_liquid_universe(daily_df, all_permnos, start_year, min_avg_value=1_000_000):
-    """Filters the investment universe based on trading value."""
-    logger.info("Starting universe pre-filtering based on liquidity...")
-    
+def filter_liquid_universe(daily_df, all_permnos, monthly_dates, min_avg_value=1_000_000, window_months=3):
+    """
+    월별 리밸런싱 시점마다 최근 window_months개월 평균 거래대금 기준으로 liquid universe를 반환.
+    Args:
+        daily_df: 일별 데이터 DataFrame (prc, vol, date, permno 필요)
+        all_permnos: 전체 permno 리스트
+        monthly_dates: 월별 리밸런싱 날짜 리스트 (datetime 또는 str)
+        min_avg_value: 최소 평균 거래대금
+        window_months: 평균 산출에 사용할 월 수 (기본 3)
+    Returns:
+        {date: liquid_permnos} dict
+    """
+    logger.info("월별 동적 유동성 필터링 시작...")
     if 'prc' not in daily_df.columns or 'vol' not in daily_df.columns:
         logger.warning("'prc' or 'vol' not found in daily_df, skipping liquidity filter.")
-        return all_permnos
+        return {date: all_permnos for date in monthly_dates}
 
+    daily_df = daily_df.copy()
     daily_df['value'] = daily_df['prc'] * daily_df['vol']
-    
-    filter_end_date = pd.to_datetime(f"{start_year}-01-01")
-    filter_start_date = filter_end_date - pd.DateOffset(months=3)
-    
-    liquidity_df = daily_df[
-        (daily_df['date'] >= filter_start_date) & 
-        (daily_df['date'] < filter_end_date)
-    ]
-    
-    avg_daily_value = liquidity_df.groupby('permno')['value'].mean()
-    
-    liquid_permnos = avg_daily_value[avg_daily_value >= min_avg_value].index.tolist()
-    
-    logger.info(f"Pre-filtering complete. {len(all_permnos)} permnos -> {len(liquid_permnos)} liquid permnos.")
-    
-    return liquid_permnos
+    daily_df['date'] = pd.to_datetime(daily_df['date'])
+
+    liquid_universe_dict = {}
+    for date in monthly_dates:
+        rebalance_date = pd.to_datetime(date)
+        window_start = rebalance_date - pd.DateOffset(months=window_months)
+        mask = (daily_df['date'] >= window_start) & (daily_df['date'] < rebalance_date)
+        liquidity_df = daily_df[mask]
+        avg_daily_value = liquidity_df.groupby('permno')['value'].mean()
+        liquid_permnos = avg_daily_value[avg_daily_value >= min_avg_value].index.tolist()
+        liquid_universe_dict[rebalance_date] = liquid_permnos
+        logger.info(f"{rebalance_date.strftime('%Y-%m-%d')} 기준 {len(all_permnos)} permnos -> {len(liquid_permnos)} liquid permnos.")
+    return liquid_universe_dict
 
 if __name__ == '__main__':
     daily, monthly, vix, ff, _ = load_raw_data()

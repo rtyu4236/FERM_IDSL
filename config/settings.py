@@ -12,12 +12,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2020
-END_YEAR = 2023
+START_YEAR = 2024
+END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 15
+TOP_N_ETFS = 50
 
 # --- Data File Paths ---
 try:
@@ -30,36 +30,54 @@ except FileNotFoundError:
 # Model Parameter Settings
 MODEL_PARAMS = {
     # Common Parameters
-    'max_weight': 0.7,
+    'max_weight': 0.4,
     'market_proxy_permno': 84398,  # SPY
 
     # ARIMAX Model Parameters
     'use_arima': False,
     'arima_params': {
         'lookback_months': 48,
-        'tau': 2.0,
+        'tau': 1.0,
         'view_outperformance': 0.02 / 12,
     },
+
+    # ETF Ranking Parameters
+    'ranking_lookback_years': 3,  # Only use last N years for ranking features (None for all)
+    'ranking_cache': True,        # Enable disk cache for monthly ranking results
 
     # TCN-SVR Model Parameters
     'use_tcn_svr': True,
     'tcn_svr_params': {
-        'tau': 0.025,
-        'lookback_window': 48, 
-        'lookback_window_step': 6, 
+        'tau': 1.0,
+        'lookback_window': 48,
+        'lookback_window_step': 6,
         'num_channels_step': 8,
-        'num_channels': [32, 32],
-        'kernel_size': 3,
-        'dropout': 0.2,
-        'base_uncertainty': 0.05,
-        'epochs': 50,
-        'lr': 0.001, 
-        'early_stopping_patience': 8,
+        # Lighter default model for faster monthly training
+    # Model strength controls (adjust for heavier training)
+    'num_channels': [32, 64],
+    'kernel_size': 3,
+    'dropout': 0.3,
+    'base_uncertainty': 0.10,
+    'epochs': 100,
+    'lr': 0.001,
+    'early_stopping_patience': 12,
         'early_stopping_min_delta': 0.0001,
-        'tune_trials_per_month': 1,
-        'optuna_n_jobs':-1,
+        # Limit how much history to use for training per permno in daily rows (None = all)
+        'train_window_rows': 720,
+    # Optimization toggles
+    'warm_start': True,
+    'use_lag_features': True,
+    # Keep at most this many lag features if set (e.g., 64). None uses all available.
+    'max_lag_features': 64,
+        # Hyperparameter tuning controls
+        'tune_trials_per_month': 5,
+        # Tune every K months (reduce monthly overhead). 1 = every month
+        'tune_every_k_months': 1,
+        # Keep modest parallelism to avoid oversubscription on shared machines
+        # Use 1 for GPU, or 2~4 for CPU-only environments
+        'optuna_n_jobs': 1,
         # Optuna search space parameters
-        'lookback_window_min': 12,
+        'lookback_window_min': 24,
         'num_channels_min': 16,
         'num_channels_max': 64,
         'dropout_min': 0.1,
@@ -72,7 +90,7 @@ MODEL_PARAMS = {
     }}
 
 # Data Caching Settings
-USE_CACHING = False
+USE_CACHING = True
 
 # Feature Stationarity Check Settings
 CHECK_STATIONARITY = True
@@ -82,8 +100,8 @@ STATIONARITY_SIGNIFICANCE_LEVEL = 0.05
 USE_DYNAMIC_OMEGA = True
 
 # If True, constrains the portfolio's monthly turnover to be below MAX_TURNOVER
-USE_TURNOVER_CONSTRAINT = False
-MAX_TURNOVER = 0.40
+USE_TURNOVER_CONSTRAINT = True
+MAX_TURNOVER = 0.60
 
 # Benchmark list settings for comparative analysis
 # None represents a 1/N portfolio (equal weight on all assets) benchmark

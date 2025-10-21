@@ -1,12 +1,47 @@
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
-# import pmdarima as pm
+try:
+    import pmdarima as pm
+except Exception:
+    pm = None
 from config import settings as config
 from src.utils.logger import logger
 import traceback
 import torch
 from src.models.tcn_svr import TCN_SVR_Model
+
+# In-process cache for warm-starting TCN per permno across months.
+# Structure: { permno: { signature_tuple: state_dict } }
+_TCN_STATE_CACHE = {}
+
+def clear_tcn_cache():
+    """Clear the warm start cache. Useful when architecture changes or to reset state."""
+    global _TCN_STATE_CACHE
+    _TCN_STATE_CACHE.clear()
+    logger.info("[clear_tcn_cache] Warm start cache cleared.")
+
+def _tcn_signature(input_size, output_size, num_channels, kernel_size, lookback_window):
+    """Return a tuple that uniquely describes the TCN architecture for warm start."""
+    return (
+        int(input_size),
+        int(output_size),
+        tuple(int(c) for c in (num_channels or [])),
+        int(kernel_size),
+        int(lookback_window),
+    )
+
+def _filter_compatible_state(model, cached_state):
+    """Return a filtered state_dict containing only keys with matching shapes."""
+    try:
+        model_state = model.net.state_dict()
+    except Exception:
+        return None
+    compatible = {}
+    for k, v in cached_state.items():
+        if k in model_state and hasattr(v, 'shape') and getattr(model_state[k], 'shape', None) == v.shape:
+            compatible[k] = v
+    return compatible if compatible else None
 
 def train_volatility_model(permno, train_df, feature_cols):
     logger.info(f"[train_volatility_model] Function entry. PERMNO: {permno}")
@@ -19,6 +54,8 @@ def train_volatility_model(permno, train_df, feature_cols):
     
     logger.info(f"[train_volatility_model] y_train shape={y_train.shape}, X_train shape={X_train.shape}")
 
+    if pm is None:
+        raise RuntimeError("pmdarima is not installed; ARIMA-based ML views are disabled.")
     model = pm.auto_arima(y_train, 
                           exogenous=X_train,
                           start_p=0, start_q=0,
@@ -196,14 +233,31 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
 
     indicator_features = ['ATRr_14', 'ADX_14', 'EMA_20', 'MACD_12_26_9', 'SMA_50', 'HURST', 'RSI_14']
     other_features = ['realized_vol', 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 'Mkt-RF', 'SMB', 'HML', 'RF']
-    lag_features = [col for col in full_feature_df.columns if '_lag_' in col]
+    use_lag = model_params.get('use_lag_features', True)
+    max_lag = model_params.get('max_lag_features')
+    lag_features_all = [col for col in full_feature_df.columns if '_lag_' in col]
+    if not use_lag:
+        lag_features = []
+    else:
+        lag_features = lag_features_all
+        if isinstance(max_lag, int) and max_lag > 0 and len(lag_features) > max_lag:
+            # Keep the last N lag features (assumes later-added columns are more recent)
+            lag_features = lag_features[-max_lag:]
     all_features = indicator_features + other_features + lag_features
     logger.info(f"[generate_tcn_svr_views] Defined features: indicator_features len={len(indicator_features)}, other_features len={len(other_features)}, lag_features len={len(lag_features)}, all_features len={len(all_features)}")
+
+    train_window_rows = model_params.get('train_window_rows')
 
     for i, permno in enumerate(permnos):
         logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
         permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
-        permno_df = permno_df.dropna(subset=all_features + ['target_return'])
+        
+        target_indicator_cols = [f'target_{col}' for col in indicator_features]
+        permno_df = permno_df.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
+
+        # If specified, restrict training rows for speed (use most recent rows)
+        if train_window_rows is not None and len(permno_df) > train_window_rows:
+            permno_df = permno_df.tail(train_window_rows)
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df shape={permno_df.shape}, columns={permno_df.columns.tolist()}")
         
         if len(permno_df) < model_params['lookback_window'] + 1:
@@ -212,7 +266,7 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             continue
 
         X_data = permno_df[all_features].values
-        y_indicators = permno_df[indicator_features].values
+        y_indicators = permno_df[target_indicator_cols].values
         y_returns = permno_df['target_return'].values
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
 
@@ -243,12 +297,67 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             svr_gamma=model_params.get('svr_gamma', 'scale'),
             lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
         )
+        # Warm start: load previous TCN weights for this permno if architecture matches; else skip.
+        if model_params.get('warm_start', True):
+            sig = _tcn_signature(
+                input_size=len(all_features),
+                output_size=len(indicator_features),
+                num_channels=model_params['num_channels'],
+                kernel_size=model_params['kernel_size'],
+                lookback_window=model_params['lookback_window'],
+            )
+            cached_for_permno = _TCN_STATE_CACHE.get(permno)
+            loaded = False
+            if isinstance(cached_for_permno, dict):
+                # New-style cache: keyed by signature
+                cached_state = cached_for_permno.get(sig)
+                if cached_state is not None:
+                    compat = _filter_compatible_state(model, cached_state)
+                    if compat:
+                        try:
+                            model.net.load_state_dict(compat, strict=False)
+                            loaded = True
+                            logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} with matching signature.")
+                        except Exception as e:
+                            logger.warning(f"[generate_tcn_svr_views] Warm-start load failed for {permno} despite signature match: {e}")
+            else:
+                # Backward-compat: older cache stored raw state_dict directly.
+                cached_state = cached_for_permno
+                if cached_state is not None:
+                    compat = _filter_compatible_state(model, cached_state)
+                    if compat:
+                        try:
+                            model.net.load_state_dict(compat, strict=False)
+                            loaded = True
+                            logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} (compat keys only).")
+                        except Exception as e:
+                            logger.warning(f"[generate_tcn_svr_views] Warm-start (compat) failed for {permno}: {e}")
+            if not loaded:
+                logger.info(f"[generate_tcn_svr_views] Skipping warm-start for {permno} (no compatible cached weights for current architecture).")
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
                   epochs=model_params.get('epochs', 50),
                   patience=model_params.get('early_stopping_patience', 10),
                   min_delta=model_params.get('early_stopping_min_delta', 0.0001))
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model fitted.")
+        # Save state dict to cache for next month warm start (keyed by architecture signature)
+        if model_params.get('warm_start', True):
+            try:
+                sig = _tcn_signature(
+                    input_size=len(all_features),
+                    output_size=len(indicator_features),
+                    num_channels=model_params['num_channels'],
+                    kernel_size=model_params['kernel_size'],
+                    lookback_window=model_params['lookback_window'],
+                )
+                cache_bucket = _TCN_STATE_CACHE.setdefault(permno, {})
+                if isinstance(cache_bucket, dict):
+                    cache_bucket[sig] = model.net.state_dict()
+                else:
+                    # If stale format exists, replace with new dict format
+                    _TCN_STATE_CACHE[permno] = {sig: model.net.state_dict()}
+            except Exception:
+                pass
         
         prediction = model.predict(X_test_tensor)
         predicted_returns[i] = prediction[0]
