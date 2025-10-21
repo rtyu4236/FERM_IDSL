@@ -141,29 +141,8 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
-    study = optuna.create_study(direction="minimize")
-    
-    # Warm-start Optuna with parameters from the previous month's best trial, if available
-    best_params_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')
-    if os.path.exists(best_params_path):
-        try:
-            with open(best_params_path, 'r') as f:
-                previous_best_params = json.load(f)
-            
-            # Prepare parameters for enqueuing
-            enqueued_params = {
-                'lookback_window': previous_best_params.get('lookback_window'),
-                'num_channels_layer1': previous_best_params.get('num_channels')[0],
-                'num_channels_layer2': previous_best_params.get('num_channels')[1],
-                'dropout': previous_best_params.get('dropout'),
-                'svr_C': previous_best_params.get('svr_C'),
-                'svr_gamma': previous_best_params.get('svr_gamma'),
-            }
-            # Enqueue the previous best trial
-            study.enqueue_trial(enqueued_params)
-            logger.info(f"Warm-started Optuna study with previous best parameters: {enqueued_params}")
-        except Exception as e:
-            logger.warning(f"Failed to warm-start Optuna study: {e}")
+    pruner = MedianPruner(n_startup_trials=max(5, n_trials // 3), n_warmup_steps=0)
+    study = optuna.create_study(direction="minimize", pruner=pruner, sampler=optuna.samplers.TPESampler())
     study.optimize(objective, n_trials=n_trials, n_jobs=config.MODEL_PARAMS['tcn_svr_params']['optuna_n_jobs'])
 
     logger.info("Tuning finished.")
