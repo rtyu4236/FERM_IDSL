@@ -17,7 +17,7 @@ END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 3
+TOP_N_ETFS = 50
 
 # --- Data File Paths ---
 try:
