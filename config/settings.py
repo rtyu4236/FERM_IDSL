@@ -12,12 +12,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2024
+START_YEAR = 2014
 END_YEAR = 2024
 
 # ETF Ranking Feature Settings
-USE_ETF_RANKING = True
-TOP_N_ETFS = 50
+TOP_N_ETFS = True
+TOP_N_ETFS = 100  # Reduced for faster processing
 
 # --- Data File Paths ---
 try:
@@ -26,6 +26,13 @@ try:
 except FileNotFoundError:
     print(f"Warning: etf_costs.json not found in {DATA_DIR}. Using empty costs.")
     ETF_COSTS = {}
+
+# GPU Settings
+GPU_SETTINGS = {
+    'use_gpu': True,  # GPU 사용 여부
+    'gpu_id': 0,      # 사용할 GPU 번호 (0, 1, 2, ...)
+    'force_cpu': False  # True로 설정하면 GPU가 있어도 CPU 사용
+}
 
 # Model Parameter Settings
 MODEL_PARAMS = {
@@ -60,7 +67,7 @@ MODEL_PARAMS = {
     'base_uncertainty': 0.10,
     'epochs': 100,
     'lr': 0.001,
-    'early_stopping_patience': 12,
+    'early_stopping_patience': 8,
         'early_stopping_min_delta': 0.0001,
         # Limit how much history to use for training per permno in daily rows (None = all)
         'train_window_rows': 720,
@@ -70,7 +77,7 @@ MODEL_PARAMS = {
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
         # Hyperparameter tuning controls
-        'tune_trials_per_month': 5,
+        'tune_trials_per_month': 50,
         # Tune every K months (reduce monthly overhead). 1 = every month
         'tune_every_k_months': 1,
         # Keep modest parallelism to avoid oversubscription on shared machines
