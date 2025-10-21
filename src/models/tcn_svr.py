@@ -3,6 +3,7 @@ import torch.nn as nn
 from pytorch_tcn import TCN
 from sklearn.svm import SVR
 from src.utils.logger import logger
+from config.settings import GPU_SETTINGS
 
 
 class LastTimeStep(nn.Module):
@@ -39,9 +40,24 @@ class TCN_SVR_Model:
         """
         logger.info("[TCN_SVR_Model.__init__] Function entry.")
         logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}, lr={lr}")
-        # Select device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        logger.info(f"[TCN_SVR_Model.__init__] Using device: {self.device}")
+        
+        # Select device based on GPU settings
+        if GPU_SETTINGS['force_cpu']:
+            self.device = torch.device('cpu')
+            logger.info("[TCN_SVR_Model.__init__] Force CPU mode enabled.")
+        elif GPU_SETTINGS['use_gpu'] and torch.cuda.is_available():
+            gpu_id = GPU_SETTINGS['gpu_id']
+            if gpu_id < torch.cuda.device_count():
+                self.device = torch.device(f'cuda:{gpu_id}')
+                logger.info(f"[TCN_SVR_Model.__init__] Using GPU {gpu_id}: {torch.cuda.get_device_name(gpu_id)}")
+            else:
+                self.device = torch.device('cpu')
+                logger.warning(f"[TCN_SVR_Model.__init__] Requested GPU {gpu_id} not available. Available GPUs: {torch.cuda.device_count()}. Using CPU.")
+        else:
+            self.device = torch.device('cpu')
+            logger.info("[TCN_SVR_Model.__init__] Using CPU (GPU not available or disabled).")
+        
+        logger.info(f"[TCN_SVR_Model.__init__] Final device: {self.device}")
         self.tcn_model = TCN(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
         logger.info(f"[TCN_SVR_Model.__init__] TCN model initialized. Type: {type(self.tcn_model)}")
         self.net = nn.Sequential(
