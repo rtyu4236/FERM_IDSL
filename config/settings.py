@@ -12,7 +12,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2014
+START_YEAR = 2004
 END_YEAR = 2024
 
 # ETF Ranking Feature Settings
@@ -65,14 +65,14 @@ MODEL_PARAMS = {
     'kernel_size': 3,
     'dropout': 0.3,
     'base_uncertainty': 0.05,
-    'epochs': 100,
-    'lr': 0.001,
-    'early_stopping_patience': 8,
-        'early_stopping_min_delta': 0.0001,
+    'epochs': 1000,
+    'lr': 0.0001,
+    'early_stopping_patience': 20,
+        'early_stopping_min_delta': 0.00001,
         # Limit how much history to use for training per permno in daily rows (None = all)
         'train_window_rows': 720,
     # Optimization toggles
-    'warm_start': True,
+    'warm_start': False,
     'use_lag_features': True,
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
@@ -84,8 +84,8 @@ MODEL_PARAMS = {
         # Use 1 for GPU, or 2~4 for CPU-only environments
         'optuna_n_jobs': 1,
         # Optuna search space parameters
-        'lookback_window_min': 24,
-        'num_channels_min': 16,
+        'lookback_window_min': 36,
+        'num_channels_min': 32,
         'num_channels_max': 64,
         'dropout_min': 0.1,
         'dropout_max': 0.5,
@@ -107,8 +107,9 @@ STATIONARITY_SIGNIFICANCE_LEVEL = 0.05
 USE_DYNAMIC_OMEGA = True
 
 # If True, constrains the portfolio's monthly turnover to be below MAX_TURNOVER
-USE_TURNOVER_CONSTRAINT = False
-MAX_TURNOVER = 0.40
+USE_TURNOVER_CONSTRAINT = True
+MAX_TURNOVER = 0.20  # 20%로 더 엄격하게 제한
+
 
 # Benchmark list settings for comparative analysis
 # None represents a 1/N portfolio (equal weight on all assets) benchmark

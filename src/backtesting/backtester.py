@@ -17,10 +17,22 @@ def apply_costs_to_returns(returns, permno, filtered_costs):
     expense_ratio = filtered_costs.get(permno, {}).get('expense_ratio', 0) / 12  # Monthly expense ratio
     return returns - expense_ratio
 
+
 def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permnos):
     logger.info(f"[_filter_config_by_permnos] Filtering configs for {len(all_available_permnos)} permnos.")
     available_set = set(all_available_permnos)
-    etf_costs_int_keys = {int(k): v for k, v in etf_costs.items()}
+    
+    # 키를 안전하게 int로 변환
+    etf_costs_int_keys = {}
+    for k, v in etf_costs.items():
+        try:
+            int_key = int(k)
+            etf_costs_int_keys[int_key] = v
+        except (ValueError, TypeError) as e:
+            logger.warning(f"[_filter_config_by_permnos] Skipping invalid key '{k}': {e}")
+            continue
+    
+    # 투자 가능한 유니버스에 있는 ETF만 선택
     filtered_costs = {p: c for p, c in etf_costs_int_keys.items() if p in available_set}
     
     for permno in available_set:
@@ -135,6 +147,8 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     use_liquid_dict = 'liquid_universe_dict' in sig.parameters
 
     for idx, analysis_date in enumerate(backtest_dates[:-1]):
+        if idx==2:
+            break
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
 
         # 1) 유동성 필터 전/후 개수 로깅 및 후보군 생성
@@ -277,14 +291,24 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             logger.info(f"[DEBUG] merged_bl head:\n{merged_bl.head().to_string()}")
             raw_bl_return = (merged_bl['weight'] * merged_bl['total_return']).sum()
             logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
+            # 비용 계산 (월간 expense ratio)
             holding_costs = (merged_bl['weight'] * merged_bl['permno'].map(lambda p: filtered_costs.get(p, {}).get('expense_ratio', 0) / 12)).sum()
+            logger.info(f"[DEBUG] holding_costs: {holding_costs:.6f} (월간 expense ratio 비용)")
             
+            # 턴오버 및 거래 비용 계산
             aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
             position_changes = np.abs(aligned_new - aligned_prev)
+            turnover = position_changes.sum() / 2
             trade_cost = (position_changes * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
+            
+            
+            logger.info(f"[DEBUG] trade_cost: {trade_cost:.6f} (거래 비용)")
+            logger.info(f"[DEBUG] turnover: {turnover:.4f} (월간 턴오버)")
+            logger.info(f"[DEBUG] total_costs: {holding_costs + trade_cost:.6f} (holding + trade)")
+            logger.info(f"[DEBUG] cost_ratio: {(holding_costs + trade_cost) / raw_bl_return * 100:.2f}% (비용/총수익률 비율)")
             net_bl_return = raw_bl_return - holding_costs - trade_cost
+            logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
             logger.info(f"[DEBUG] net_bl_return: {net_bl_return}")
-            turnover = np.abs(aligned_new - aligned_prev).sum() / 2
             monthly_turnovers.append(turnover)
 
             # Save weights detailed records

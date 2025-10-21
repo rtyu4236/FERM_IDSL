@@ -106,8 +106,24 @@ class TCN_SVR_Objective:
         y_train_indicators_seq = y_seq_combined[:, -len(self.indicator_features)-1:-1]
         y_train_returns_seq = y_seq_combined[:, -1]
 
-        X_train_tensor = torch.from_numpy(X_train_seq).float()
-        y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
+        # 튜닝 과정에도 정규화 적용 (view_generator.py와 동일하게)
+        from sklearn.preprocessing import StandardScaler
+        
+        # X 데이터 정규화
+        scaler_X = StandardScaler()
+        X_train_scaled = scaler_X.fit_transform(X_train_seq.reshape(-1, X_train_seq.shape[-1]))
+        X_train_scaled = X_train_scaled.reshape(X_train_seq.shape)
+        
+        # y 데이터 정규화
+        scaler_y = StandardScaler()
+        y_train_scaled = scaler_y.fit_transform(y_train_indicators_seq)
+        
+        # 수익률도 정규화
+        scaler_returns = StandardScaler()
+        y_train_returns_scaled = scaler_returns.fit_transform(y_train_returns_seq.reshape(-1, 1)).flatten()
+        
+        X_train_tensor = torch.from_numpy(X_train_scaled).float()
+        y_train_indicators_tensor = torch.from_numpy(y_train_scaled).float()
 
         model = TCN_SVR_Model(
             input_size=len(self.all_features),
@@ -127,7 +143,7 @@ class TCN_SVR_Objective:
         model.fit(
             X_train_tensor,
             y_train_indicators_tensor,
-            y_train_returns_seq,
+            y_train_returns_scaled,  # 정규화된 수익률 사용
             epochs=tcn_epochs,
             patience=self.config_model_params['tcn_svr_params']['early_stopping_patience'],
             min_delta=self.config_model_params['tcn_svr_params']['early_stopping_min_delta']
@@ -141,7 +157,7 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=42))
     
     # Warm-start Optuna with parameters from the previous month's best trial, if available
     best_params_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')

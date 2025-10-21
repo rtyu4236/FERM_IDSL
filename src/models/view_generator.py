@@ -250,40 +250,92 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
 
     for i, permno in enumerate(permnos):
         logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
-        permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
-        
-        target_indicator_cols = [f'target_{col}' for col in indicator_features]
-        permno_df = permno_df.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
 
-        # If specified, restrict training rows for speed (use most recent rows)
+        # --- [수정 1] 데이터 분리 (analysis_date 기준) ---
+        # 1. 학습용 데이터 (analysis_date 미만)
+        train_df_hist = full_feature_df[
+            (full_feature_df['permno'] == permno) & 
+            (full_feature_df['date'] < analysis_date)
+        ].copy()
+
+        # 2. 예측용 피처 윈도우 (analysis_date 포함 과거 lookback 만큼)
+        features_for_pred_df = full_feature_df[
+            (full_feature_df['permno'] == permno) &
+            (full_feature_df['date'] <= analysis_date) 
+        ].copy()
+        # -----------------------------------------------
+
+        target_indicator_cols = [f'target_{col}' for col in indicator_features]
+
+        # --- [수정 2] 학습 데이터에만 dropna 및 윈도우 적용 ---
+        permno_df = train_df_hist.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
+
         if train_window_rows is not None and len(permno_df) > train_window_rows:
             permno_df = permno_df.tail(train_window_rows)
-        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df shape={permno_df.shape}, columns={permno_df.columns.tolist()}")
-        
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df (TRAIN) shape={permno_df.shape}")
+        # -----------------------------------------------
+
+        # 학습 데이터가 충분한지 확인
         if len(permno_df) < model_params['lookback_window'] + 1:
-            logger.warning(f"Skipping view generation for {permno} due to insufficient data. (Data count: {len(permno_df)}, lookback: {model_params['lookback_window']})")
+            logger.warning(f"Skipping view generation for {permno} due to insufficient TRAINING data. (Data count: {len(permno_df)}, lookback: {model_params['lookback_window']})")
             predicted_returns[i] = 0
             continue
 
+        # --- [수정 3] 학습용 시퀀스 생성 ---
         X_data = permno_df[all_features].values
         y_indicators = permno_df[target_indicator_cols].values
         y_returns = permno_df['target_return'].values
-        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
-
+        
         X_seq, y_seq_combined = _create_sequences(np.hstack([X_data, y_indicators, y_returns.reshape(-1,1)]), model_params['lookback_window'])
-        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_seq shape={X_seq.shape}, y_seq_combined shape={y_seq_combined.shape}")
         
         X_train_seq = X_seq[:, :, :-len(indicator_features)-1]
         y_train_indicators_seq = y_seq_combined[:, -len(indicator_features)-1:-1]
         y_train_returns_seq = y_seq_combined[:, -1]
-        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_seq shape={X_train_seq.shape}, y_train_indicators_seq shape={y_train_indicators_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
-
-        X_test_seq = np.array([X_data[-model_params['lookback_window']:]])
+        logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_seq shape={X_train_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
+        # -----------------------------------------------
+        
+        # --- [수정 4] 예측용(Test) 시퀀스 생성 ---
+        test_feature_window_df = features_for_pred_df.tail(model_params['lookback_window'])
+        
+        if len(test_feature_window_df) < model_params['lookback_window']:
+            logger.warning(f"Skipping view generation for {permno} due to insufficient data for PREDICTION window. (Data count: {len(test_feature_window_df)}, lookback: {model_params['lookback_window']})")
+            predicted_returns[i] = 0
+            continue
+        
+        # 예측용 윈도우에 NaN이 있는지 확인 (중요)
+        if test_feature_window_df[all_features].isnull().values.any():
+             logger.warning(f"Skipping view generation for {permno} due to NaNs in PREDICTION window.")
+             predicted_returns[i] = 0
+             continue
+             
+        X_test_seq = np.array([test_feature_window_df[all_features].values])
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_test_seq shape={X_test_seq.shape}")
+        # -----------------------------------------------
 
-        X_train_tensor = torch.from_numpy(X_train_seq).float()
-        y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
-        X_test_tensor = torch.from_numpy(X_test_seq).float()
+        # --- [수정 5] 정규화 (학습 데이터로만 fit) ---
+        from sklearn.preprocessing import StandardScaler
+        
+        # X 데이터 정규화
+        scaler_X = StandardScaler()
+        X_train_scaled = scaler_X.fit_transform(X_train_seq.reshape(-1, X_train_seq.shape[-1]))
+        X_train_scaled = X_train_scaled.reshape(X_train_seq.shape)
+        
+        # test_seq도 transform
+        X_test_scaled = scaler_X.transform(X_test_seq.reshape(-1, X_test_seq.shape[-1]))
+        X_test_scaled = X_test_scaled.reshape(X_test_seq.shape)
+        
+        # y 데이터 정규화
+        scaler_y = StandardScaler()
+        y_train_scaled = scaler_y.fit_transform(y_train_indicators_seq)
+        
+        # SVR 학습을 위해 수익률도 정규화
+        scaler_returns = StandardScaler()
+        y_train_returns_scaled = scaler_returns.fit_transform(y_train_returns_seq.reshape(-1, 1)).flatten()
+        # -----------------------------------------------
+
+        X_train_tensor = torch.from_numpy(X_train_scaled).float()
+        y_train_indicators_tensor = torch.from_numpy(y_train_scaled).float()
+        X_test_tensor = torch.from_numpy(X_test_scaled).float()
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_tensor shape={X_train_tensor.shape}, y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, X_test_tensor shape={X_test_tensor.shape}")
 
         model = TCN_SVR_Model(
@@ -335,7 +387,7 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             if not loaded:
                 logger.info(f"[generate_tcn_svr_views] Skipping warm-start for {permno} (no compatible cached weights for current architecture).")
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
-        model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_seq,
+        model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_scaled,
                   epochs=model_params.get('epochs', 50),
                   patience=model_params.get('early_stopping_patience', 10),
                   min_delta=model_params.get('early_stopping_min_delta', 0.0001))
@@ -359,9 +411,14 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             except Exception:
                 pass
         
-        prediction = model.predict(X_test_tensor)
-        predicted_returns[i] = prediction[0]
-        logger.info(f"Predicted return for {permno}: {prediction[0]:.4f}")
+        # SVR 예측 (정규화된 값)
+        prediction_normalized = model.predict(X_test_tensor)
+        
+        # 수익률 정규화 해제하여 원래 스케일로 복원
+        predicted_return_original = scaler_returns.inverse_transform(prediction_normalized.reshape(-1, 1))[0, 0]
+        
+        predicted_returns[i] = predicted_return_original
+        logger.info(f"Predicted return for {permno}: {predicted_return_original:.4f}")
 
     P = np.identity(num_assets)
     Q = predicted_returns.reshape(-1, 1)

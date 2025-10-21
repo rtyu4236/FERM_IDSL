@@ -123,8 +123,12 @@ class TCN_SVR_Model:
                 output = self.net(X_train_tcn.permute(0, 2, 1))
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - After TCN forward pass. Output shape={output.shape}")
             loss = self.criterion(output, y_train_tcn)
-            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Loss calculated: {loss.item():.4f}")
             scaler.scale(loss).backward()
+            
+            # 강화된 그래디언트 클리핑 (그래디언트 폭발 방지)
+            scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=0.1)  # 정규화된 데이터에 맞게 더 강한 클리핑
+            
             scaler.step(self.optimizer)
             scaler.update()
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Optimizer step completed.")
@@ -137,7 +141,7 @@ class TCN_SVR_Model:
                     val_loss = self.criterion(val_output, y_val_tcn)
                 
                 if (epoch + 1) % 10 == 0:
-                    logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+                    logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.6f}, Val Loss: {val_loss.item():.6f} (Normalized Scale)")
 
                 if val_loss.item() < best_loss - min_delta:
                     best_loss = val_loss.item()
@@ -152,7 +156,7 @@ class TCN_SVR_Model:
                     logger.info(f"[TCN_SVR_Model.fit] Early stopping triggered after {epoch+1} epochs.")
                     break
             elif (epoch + 1) % 10 == 0:
-                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}")
+                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.6f} (Normalized Scale)")
         
         if can_validate and best_model_state:
             self.net.load_state_dict(best_model_state)
