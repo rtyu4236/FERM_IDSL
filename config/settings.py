@@ -30,7 +30,7 @@ except FileNotFoundError:
 # Model Parameter Settings
 MODEL_PARAMS = {
     # Common Parameters
-    'max_weight': 0.7,
+    'max_weight': 0.4,
     'market_proxy_permno': 84398,  # SPY
 
     # ARIMAX Model Parameters
@@ -57,7 +57,7 @@ MODEL_PARAMS = {
     'num_channels': [32, 64],
     'kernel_size': 3,
     'dropout': 0.3,
-    'base_uncertainty': 0.05,
+    'base_uncertainty': 0.10,
     'epochs': 100,
     'lr': 0.001,
     'early_stopping_patience': 12,
@@ -100,8 +100,8 @@ STATIONARITY_SIGNIFICANCE_LEVEL = 0.05
 USE_DYNAMIC_OMEGA = True
 
 # If True, constrains the portfolio's monthly turnover to be below MAX_TURNOVER
-USE_TURNOVER_CONSTRAINT = False
-MAX_TURNOVER = 0.40
+USE_TURNOVER_CONSTRAINT = True
+MAX_TURNOVER = 0.60
 
 # Benchmark list settings for comparative analysis
 # None represents a 1/N portfolio (equal weight on all assets) benchmark

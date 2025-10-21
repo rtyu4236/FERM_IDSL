@@ -43,16 +43,17 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno=84398)
     return long_term_delta
 
 class BlackLittermanPortfolio:
-    def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_permno):
+    def __init__(self, all_returns_df, full_monthly_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_permno):
         logger.info("[BlackLittermanPortfolio.__init__] Function entry.")
-        logger.info(f"[BlackLittermanPortfolio.__init__] Input: all_returns_df shape={all_returns_df.shape}, ff_df shape={ff_df.shape}, lookback_months={lookback_months}, tau={tau}, market_proxy_permno={market_proxy_permno}")
-        self.all_returns_df = all_returns_df
+        logger.info(f"[BlackLittermanPortfolio.__init__] Input: all_returns_df shape={all_returns_df.shape}, full_monthly_df shape={full_monthly_df.shape}, ff_df shape={ff_df.shape}, lookback_months={lookback_months}, tau={tau}, market_proxy_permno={market_proxy_permno}")
+        self.all_returns_df = all_returns_df # This is the filtered monthly_df for the current universe
+        self.full_monthly_df = full_monthly_df # This is the complete monthly_df
         self.ff_df = ff_df
         self.expense_ratios = expense_ratios
         self.lookback_months = lookback_months
         self.tau = tau
         self.market_proxy_permno = market_proxy_permno
-        self.default_delta = _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno)
+        self.default_delta = _calculate_long_term_delta(self.full_monthly_df, ff_df, market_proxy_permno)
         logger.info(f"[BlackLittermanPortfolio.__init__] default_delta={self.default_delta}")
         logger.info("[BlackLittermanPortfolio.__init__] Function exit.")
 
@@ -133,7 +134,7 @@ class BlackLittermanPortfolio:
         logger.info("[BlackLittermanPortfolio._calculate_inputs] Function exit.")
         return Sigma, delta, W_mkt
 
-    def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None):
+    def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=config.MODEL_PARAMS['max_weight'], previous_weights=None):
         logger.info("[BlackLittermanPortfolio.get_black_litterman_portfolio] Function entry.")
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Input: analysis_date={analysis_date}, P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
         current_permnos, returns_pivot = self._get_current_universe(analysis_date)
@@ -221,7 +222,7 @@ class BlackLittermanPortfolio:
             G_list.append(np.block([[np.identity(n), -np.identity(n)], [-np.identity(n), -np.identity(n)]]))
             h_list.append(np.hstack([w_old, -w_old]))
             G_list.append(np.hstack([np.zeros(n), np.ones(n)]))
-            h_list.append(config.MAX_TURNOVER)
+            h_list.append(2 * config.MAX_TURNOVER)
 
             G = matrix(np.vstack(G_list))
             h = matrix(np.hstack(h_list))
@@ -246,6 +247,7 @@ class BlackLittermanPortfolio:
 
         try:
             solution = solvers.qp(P_opt, q_opt, G, h, A, b, solver='qp')
+            logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] CVXOPT solution status: {solution['status']}")
             result_x = np.array(solution['x']).flatten()
             weights = result_x[:n]
             logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Optimization successful. weights shape={weights.shape}")

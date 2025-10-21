@@ -211,6 +211,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
 
         bl_portfolio_model = BlackLittermanPortfolio(
             all_returns_df=monthly_df_filtered,
+            full_monthly_df=monthly_df,
             ff_df=ff_df,
             expense_ratios=filtered_costs,
             lookback_months=active_model_params.get('lookback_window', 24),
@@ -266,19 +267,18 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         trade_cost = 0.0
         turnover = 0.0
         if not next_month_returns.empty and weights is not None and not weights.empty:
-            logger.info(f"[DEBUG] next_month_returns head:\n{next_month_returns.head().to_string()}")
-            logger.info(f"[DEBUG] weights head:\n{weights.head().to_string()}")
+            logger.debug(f"[DEBUG] next_month_returns head:\n{next_month_returns.head().to_string()}")
+            logger.debug(f"[DEBUG] weights head:\n{weights.head().to_string()}")
             merged_bl = pd.merge(weights.to_frame('weight'), next_month_returns, left_index=True, right_on='permno')
-            logger.info(f"[DEBUG] merged_bl head:\n{merged_bl.head().to_string()}")
+            logger.debug(f"[DEBUG] merged_bl head:\n{merged_bl.head().to_string()}")
             raw_bl_return = (merged_bl['weight'] * merged_bl['total_return']).sum()
-            logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
             holding_costs = (merged_bl['weight'] * merged_bl['permno'].map(lambda p: filtered_costs.get(p, {}).get('expense_ratio', 0) / 12)).sum()
             aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
             trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
             net_bl_return = raw_bl_return - holding_costs - trade_cost
-            logger.info(f"[DEBUG] net_bl_return: {net_bl_return}")
             turnover = np.abs(aligned_new - aligned_prev).sum() / 2
             monthly_turnovers.append(turnover)
+            logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Raw Return: {raw_bl_return:.4f}, Holding Costs: {holding_costs:.4f}, Trade Costs: {trade_cost:.4f}, Net Return: {net_bl_return:.4f}, Turnover: {turnover:.4f}")
 
             # Save weights detailed records
             for permno_idx, w in aligned_new.items():
