@@ -73,7 +73,7 @@ class ETFQuantRanker:
         grouped = df.groupby(level='permno')['close']
         df['mom3m'] = grouped.pct_change(63)
         df['mom6m'] = grouped.pct_change(126)
-        df['mom12m'] = grouped.pct_change(231) # 원래는 252였으나, 231로 수정
+        df['mom12m'] = grouped.pct_change(252)
         df['volatility'] = grouped.pct_change().rolling(21).std()
         df['rsi14'] = grouped.transform(self._calculate_rsi, length=14)
         df['target'] = (grouped.pct_change(21).shift(-21) > 0).astype(float)

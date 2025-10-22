@@ -40,7 +40,7 @@ if __name__ == '__main__':
     )
     # 5년 이상 거래 이력 필터 (각 월별로 적용)
     logger_setup.logger.info("Filtering universe by minimum history (5 years) for each month...")
-    MIN_MONTHS = 12
+    MIN_MONTHS = 5 * 12
     for date in monthly_dates:
         filter_date = pd.to_datetime(date)
         permnos = liquid_universe_dict[filter_date]

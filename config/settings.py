@@ -36,20 +36,20 @@ MODEL_PARAMS = {
     # ARIMAX Model Parameters
     'use_arima': False,
     'arima_params': {
-        'lookback_months': 12,
+        'lookback_months': 48,
         'tau': 1.0,
         'view_outperformance': 0.02 / 12,
     },
 
     # ETF Ranking Parameters
-    'ranking_lookback_years': 1,  # Only use last N years for ranking features (None for all)
+    'ranking_lookback_years': 3,  # Only use last N years for ranking features (None for all)
     'ranking_cache': True,        # Enable disk cache for monthly ranking results
 
     # TCN-SVR Model Parameters
     'use_tcn_svr': True,
     'tcn_svr_params': {
         'tau': 1.0,
-        'lookback_window': 12,
+        'lookback_window': 48,
         'lookback_window_step': 6,
         'num_channels_step': 8,
         # Lighter default model for faster monthly training
@@ -70,14 +70,14 @@ MODEL_PARAMS = {
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
         # Hyperparameter tuning controls
-        'tune_trials_per_month': 1,
+        'tune_trials_per_month': 5,
         # Tune every K months (reduce monthly overhead). 1 = every month
         'tune_every_k_months': 1,
         # Keep modest parallelism to avoid oversubscription on shared machines
         # Use 1 for GPU, or 2~4 for CPU-only environments
         'optuna_n_jobs': 1,
         # Optuna search space parameters
-        'lookback_window_min': 12,
+        'lookback_window_min': 24,
         'num_channels_min': 16,
         'num_channels_max': 64,
         'dropout_min': 0.1,
