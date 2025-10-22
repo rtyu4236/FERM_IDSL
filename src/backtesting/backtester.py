@@ -12,10 +12,27 @@ from src.utils.logger import logger
 from src.tuning import tcn_svr_tuner
 from src.models.etf_quant_ranker import ETFQuantRanker, create_etf_universe_from_daily
 
+def apply_costs_to_returns(returns, permno, filtered_costs):
+    """Apply realistic costs to benchmark returns for fair comparison"""
+    expense_ratio = filtered_costs.get(permno, {}).get('expense_ratio', 0) / 12  # Monthly expense ratio
+    return returns - expense_ratio
+
+
 def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permnos):
     logger.info(f"[_filter_config_by_permnos] Filtering configs for {len(all_available_permnos)} permnos.")
     available_set = set(all_available_permnos)
-    etf_costs_int_keys = {int(k): v for k, v in etf_costs.items()}
+    
+    # 키를 안전하게 int로 변환
+    etf_costs_int_keys = {}
+    for k, v in etf_costs.items():
+        try:
+            int_key = int(k)
+            etf_costs_int_keys[int_key] = v
+        except (ValueError, TypeError) as e:
+            logger.warning(f"[_filter_config_by_permnos] Skipping invalid key '{k}': {e}")
+            continue
+    
+    # 투자 가능한 유니버스에 있는 ETF만 선택
     filtered_costs = {p: c for p, c in etf_costs_int_keys.items() if p in available_set}
     
     for permno in available_set:
@@ -164,7 +181,14 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             if not candidate_permnos:
                 ranked_permnos = []
             else:
-                ranked_permnos = ranker.get_top_permnos(str(analysis_date.date()), daily_df, candidate_permnos, top_n=top_n)
+                output_dir = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
+                ranked_permnos = ranker.get_top_permnos(
+                    str(analysis_date.date()), 
+                    daily_df, 
+                    candidate_permnos, 
+                    top_n=top_n,
+                    output_dir=output_dir
+                )
             logger.info(f"[Rebalance {analysis_date.strftime('%Y-%m')}] Rank selected ({len(ranked_permnos)}): {ranked_permnos}")
             universe_for_month = ranked_permnos
             # save monthly ranking selection
@@ -234,11 +258,33 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                     full_feature_df=ml_features_df[ml_features_df['permno'].isin(current_permnos)],
                     model_params=active_model_params
                 )
-                weights, _ = bl_portfolio_model.get_black_litterman_portfolio(
+                # Save P, Q, Omega matrices
+                output_dir = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
+                date_str = analysis_date.strftime('%Y-%m-%d')
+                try:
+                    if P.size > 0:
+                        pd.DataFrame(P, columns=current_permnos).to_csv(os.path.join(output_dir, f"bl_P_matrix_{date_str}.csv"))
+                    if Q.size > 0:
+                        pd.DataFrame(Q, index=current_permnos, columns=['view_return']).to_csv(os.path.join(output_dir, f"bl_Q_vector_{date_str}.csv"))
+                    if Omega.size > 0:
+                        pd.DataFrame(Omega, index=current_permnos, columns=current_permnos).to_csv(os.path.join(output_dir, f"bl_Omega_matrix_{date_str}.csv"))
+                    logger.info(f"Saved Black-Litterman P, Q, Omega data for {date_str}")
+                except Exception as e:
+                    logger.warning(f"Could not save P, Q, Omega data for {date_str}: {e}")
+                weights, mu_bl_net = bl_portfolio_model.get_black_litterman_portfolio(
                     analysis_date=analysis_date, P=P, Q=Q, Omega=Omega, 
                     pre_calculated_inputs=(Sigma, delta, W_mkt), max_weight=current_model_params['max_weight'],
                     previous_weights=previous_weights
                 )
+                # Save posterior returns
+                if mu_bl_net is not None:
+                    try:
+                        output_dir = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
+                        date_str = analysis_date.strftime('%Y-%m-%d')
+                        pd.Series(mu_bl_net, index=current_permnos, name="posterior_return").to_csv(os.path.join(output_dir, f"bl_posterior_returns_{date_str}.csv"))
+                        logger.info(f"Saved Black-Litterman posterior returns for {date_str}")
+                    except Exception as e:
+                        logger.warning(f"Could not save posterior returns for {date_str}: {e}")
                 # BL 최적화 실패 시 분석 대상 유니버스 대상 1/N 투자로 대체
                 if weights is None or weights.empty or not np.isfinite(weights).all() or abs(weights.sum()) < 1e-8:
                     logger.warning("BL optimization failed or produced invalid weights; using equal-weight fallback across optimization universe.")
@@ -272,12 +318,24 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             logger.info(f"[DEBUG] merged_bl head:\n{merged_bl.head().to_string()}")
             raw_bl_return = (merged_bl['weight'] * merged_bl['total_return']).sum()
             logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
+            # 비용 계산 (월간 expense ratio)
             holding_costs = (merged_bl['weight'] * merged_bl['permno'].map(lambda p: filtered_costs.get(p, {}).get('expense_ratio', 0) / 12)).sum()
+            logger.info(f"[DEBUG] holding_costs: {holding_costs:.6f} (월간 expense ratio 비용)")
+            
+            # 턴오버 및 거래 비용 계산
             aligned_prev, aligned_new = previous_weights.align(weights, join='outer', fill_value=0)
-            trade_cost = (np.abs(aligned_new - aligned_prev) * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
+            position_changes = np.abs(aligned_new - aligned_prev)
+            turnover = position_changes.sum() / 2
+            trade_cost = (position_changes * aligned_new.index.map(lambda p: filtered_costs.get(p, {}).get('trading_cost_spread', 0.0001))).sum()
+            
+            
+            logger.info(f"[DEBUG] trade_cost: {trade_cost:.6f} (거래 비용)")
+            logger.info(f"[DEBUG] turnover: {turnover:.4f} (월간 턴오버)")
+            logger.info(f"[DEBUG] total_costs: {holding_costs + trade_cost:.6f} (holding + trade)")
+            logger.info(f"[DEBUG] cost_ratio: {(holding_costs + trade_cost) / raw_bl_return * 100:.2f}% (비용/총수익률 비율)")
             net_bl_return = raw_bl_return - holding_costs - trade_cost
+            logger.info(f"[DEBUG] raw_bl_return: {raw_bl_return}")
             logger.info(f"[DEBUG] net_bl_return: {net_bl_return}")
-            turnover = np.abs(aligned_new - aligned_prev).sum() / 2
             monthly_turnovers.append(turnover)
 
             # Save weights detailed records
@@ -358,7 +416,9 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                 val = exact.iloc[-1]['total_return']
             values.append(val)
 
-        bench_series = pd.Series(values, index=bl_returns_series.index, name=str(permno))
+        # Apply costs to benchmark returns for fair comparison
+        values_with_costs = [apply_costs_to_returns(val, permno, filtered_costs) if not pd.isna(val) else np.nan for val in values]
+        bench_series = pd.Series(values_with_costs, index=bl_returns_series.index, name=str(permno))
         benchmark_returns_dict[permno] = bench_series
     
     # Overall 1/N benchmark across all investable permnos (unconditional)
@@ -368,14 +428,31 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
         if not one_over_n_returns.index.is_unique:
             logger.warning("Duplicate dates found in '1/N Portfolio' series index. Dropping duplicates.")
             one_over_n_returns = one_over_n_returns[~one_over_n_returns.index.duplicated(keep='first')]
-        benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns
+        
+        avg_expense_ratio = np.mean([filtered_costs.get(p, {}).get('expense_ratio', 0) for p in all_permnos if p in filtered_costs])
+        one_over_n_returns_with_costs = one_over_n_returns - (avg_expense_ratio / 12)
+        benchmark_returns_dict['1/N Portfolio'] = one_over_n_returns_with_costs
 
     # Include TopN 1/N benchmark if created
     if use_etf_ranking and topn_equal_weight_returns is not None and len(topn_equal_weight_returns) > 0:
         topn_series = pd.concat(topn_equal_weight_returns).sort_index().squeeze().rename('TopN 1/N')
         # Align to strategy dates just in case
         topn_series = topn_series.reindex(bl_returns_series.index, fill_value=0.0)
-        benchmark_returns_dict['TopN 1/N'] = topn_series
+        
+        # Apply costs to TopN 1/N benchmark for fair comparison
+        # Calculate average expense ratio for the selected universe (this is approximate)
+        if hasattr(ranker, 'get_top_permnos') and universe_per_month:
+            # Get average costs from the most recent universe selection
+            recent_universe = list(universe_per_month.values())[-1] if universe_per_month else []
+            if recent_universe:
+                avg_topn_expense_ratio = np.mean([filtered_costs.get(p, {}).get('expense_ratio', 0) for p in recent_universe if p in filtered_costs])
+                topn_series_with_costs = topn_series - (avg_topn_expense_ratio / 12)
+            else:
+                topn_series_with_costs = topn_series
+        else:
+            topn_series_with_costs = topn_series
+        
+        benchmark_returns_dict['TopN 1/N'] = topn_series_with_costs
     
     results_df = pd.DataFrame({'BL_ML_Strategy': bl_returns_series, **benchmark_returns_dict})
 

@@ -28,21 +28,72 @@ def calculate_hurst_exponent(time_series, max_lag=100):
     poly = np.polyfit(np.log(lags), np.log(tau), 1)
     return poly[0]
 
+def _optimize_df_memory(df):
+    """Downcast numeric columns to save memory."""
+    for col in df.select_dtypes(include=['float64']).columns:
+        df[col] = df[col].astype('float32')
+    for col in df.select_dtypes(include=['int64']).columns:
+        df[col] = pd.to_numeric(df[col], downcast='integer')
+    return df
+
 def load_raw_data():
     """
     Load and perform initial cleaning of all raw data files.
+    Prioritizes loading from Parquet files for speed. If they don't exist,
+    it loads from CSV and creates the Parquet file for the next run.
     """
-    logger.info("Starting to load raw data files.")
-    
-    # Load daily data and unify column names to lowercase
-    daily_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_daily_cleaned.csv'), low_memory=False)
-    daily_df.columns = [col.lower() for col in daily_df.columns]
+    logger.info("Starting to load raw data files (Parquet preferred).")
+
+    daily_parquet_path = os.path.join(config.DATA_DIR, 'crsp_daily_cleaned.parquet')
+    monthly_parquet_path = os.path.join(config.DATA_DIR, 'crsp_monthly_cleaned.parquet')
+    daily_csv_path = os.path.join(config.DATA_DIR, 'crsp_daily_cleaned.csv')
+    monthly_csv_path = os.path.join(config.DATA_DIR, 'crsp_monthly_cleaned.csv')
+
+    # Load daily data
+    try:
+        if os.path.exists(daily_parquet_path):
+            daily_df = pd.read_parquet(daily_parquet_path)
+            logger.info(f"Loaded daily data from Parquet: {daily_parquet_path}")
+        else:
+            daily_df = pd.read_csv(daily_csv_path, low_memory=False)
+            daily_df.columns = [col.lower() for col in daily_df.columns]
+            daily_df['date'] = pd.to_datetime(daily_df['date'])
+            daily_df = _optimize_df_memory(daily_df)
+            daily_df.to_parquet(daily_parquet_path)
+            logger.info(f"Loaded daily data from CSV and created Parquet cache: {daily_parquet_path}")
+    except Exception as e:
+        logger.error(f"Failed to load daily data: {e}")
+        # Fallback to CSV if Parquet loading fails for some reason
+        daily_df = pd.read_csv(daily_csv_path, low_memory=False)
+        daily_df.columns = [col.lower() for col in daily_df.columns]
+        daily_df['date'] = pd.to_datetime(daily_df['date'])
+
+    # Load monthly data
+    try:
+        if os.path.exists(monthly_parquet_path):
+            monthly_df = pd.read_parquet(monthly_parquet_path)
+            logger.info(f"Loaded monthly data from Parquet: {monthly_parquet_path}")
+        else:
+            monthly_df = pd.read_csv(monthly_csv_path, low_memory=False)
+            monthly_df.columns = [col.lower() for col in monthly_df.columns]
+            monthly_df['date'] = pd.to_datetime(monthly_df['date'])
+            monthly_df = _optimize_df_memory(monthly_df)
+            monthly_df.to_parquet(monthly_parquet_path)
+            logger.info(f"Loaded monthly data from CSV and created Parquet cache: {monthly_parquet_path}")
+    except Exception as e:
+        logger.error(f"Failed to load monthly data: {e}")
+        monthly_df = pd.read_csv(monthly_csv_path, low_memory=False)
+        monthly_df.columns = [col.lower() for col in monthly_df.columns]
+        monthly_df['date'] = pd.to_datetime(monthly_df['date'])
+
+    # Ensure date columns are datetime objects, regardless of source
     daily_df['date'] = pd.to_datetime(daily_df['date'])
-    
-    # Load monthly data and unify column names to lowercase
-    monthly_df = pd.read_csv(os.path.join(config.DATA_DIR, 'crsp_monthly_cleaned.csv'), low_memory=False)
-    monthly_df.columns = [col.lower() for col in monthly_df.columns]
     monthly_df['date'] = pd.to_datetime(monthly_df['date'])
+
+    # Optimize dataframes after loading
+    daily_df = _optimize_df_memory(daily_df)
+    monthly_df = _optimize_df_memory(monthly_df)
+    
     monthly_df.drop_duplicates(subset=['permno', 'date'], keep='first', inplace=True)
     monthly_df = monthly_df[monthly_df['date'] >= '1990-01-01'].copy()
     monthly_df = monthly_df.dropna(subset=['permno'])
@@ -51,11 +102,12 @@ def load_raw_data():
     monthly_df['total_return'] = pd.to_numeric(monthly_df['total_return'], errors='coerce')
 
     all_permnos = monthly_df['permno'].unique().tolist()
-    logger.info(f"Found a total of {len(all_permnos)} unique permnos in the data.")
+    # logger.info(f"Found a total of {len(all_permnos)} unique permnos in the data.")
 
     vix_df = pd.read_csv(os.path.join(config.DATA_DIR, 'vix_index.csv'))
     vix_df.rename(columns={'Date': 'date'}, inplace=True)
     vix_df['date'] = pd.to_datetime(vix_df['date'])
+    vix_df = _optimize_df_memory(vix_df)
 
     ff_df = pd.read_csv(os.path.join(config.DATA_DIR, 'F-F_Research_Data_Factors_monthly.csv'))
     ff_df.rename(columns={'Date': 'date'}, inplace=True)
@@ -63,21 +115,23 @@ def load_raw_data():
     ff_df['date'] = pd.to_datetime(ff_df['date'], format='%Y%m')
     ff_df['date'] = ff_df['date'] + pd.offsets.MonthEnd(0)
     ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']] = ff_df[['Mkt-RF', 'SMB', 'HML', 'RF']].astype(float) / 100
+    ff_df = _optimize_df_memory(ff_df)
     
-    logger.info("Raw data loading complete.")
+    # logger.info("Raw data loading complete.")
     return daily_df, monthly_df, vix_df, ff_df, all_permnos
 
 def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     """Create a unified feature dataset for machine learning models."""
     cache_path = os.path.join(config.CACHE_DIR, f'feature_dataset_stationary_{config.CHECK_STATIONARITY}.feather')
     if config.USE_CACHING and os.path.exists(cache_path):
-        logger.info(f"Loading cached feature dataset: {cache_path}")
+        # logger.info(f"Loading cached feature dataset: {cache_path}")
         return pd.read_feather(cache_path)
 
-    logger.info("Starting to create a new feature dataset for ML models.")
+    # logger.info("Starting to create a new feature dataset for ML models.")
 
     monthly_returns = monthly_df.pivot_table(index='date', columns='permno', values='total_return')
     target_returns = monthly_returns.shift(-1)
+    del monthly_returns # Free up memory
 
     def intra_month_mdd(x):
         cumulative_returns = (1 + x).cumprod()
@@ -98,15 +152,19 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     vix_monthly['date'] = vix_monthly['date'] + pd.offsets.MonthEnd(0)
     
     macro_df = pd.merge(vix_monthly, ff_df, on='date', how='left')
+    del vix_monthly, ff_df # Free up memory
 
     target_returns_long = target_returns.stack().reset_index(name='target_return')
+    del target_returns # Free up memory
     final_df = pd.merge(features, target_returns_long, on=['date', 'permno'], how='left')
+    del features, target_returns_long # Free up memory
     final_df = pd.merge(final_df, macro_df, on='date', how='left')
+    del macro_df # Free up memory
     final_df = final_df.sort_values(by=['permno', 'date']).reset_index(drop=True)
 
-    logger.info("Starting to generate technical analysis indicators.")
+    # logger.info("Starting to generate technical analysis indicators.")
     if 'close' not in daily_df.columns and 'vwretd' in daily_df.columns:
-        logger.warning("'close' column not found. Generating a virtual close price based on 'vwretd'.")
+        # logger.warning("'close' column not found. Generating a virtual close price based on 'vwretd'.")
         daily_df['close'] = daily_df.groupby('permno')['vwretd'].transform(lambda x: (1 + x).cumprod())
     if 'high' not in daily_df.columns:
         daily_df['high'] = daily_df['close']
@@ -118,27 +176,39 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
         daily_df['volume'] = 0
     daily_df.fillna(method='ffill', inplace=True)
 
+    # Define a pandas_ta strategy for efficiency
+    ta_strategy = ta.Strategy(
+        name="custom_ta_strategy",
+        description="A collection of technical analysis indicators",
+        ta=[
+            {"kind": "atr", "append": True},
+            {"kind": "adx", "append": True},
+            {"kind": "ema", "length": 20, "append": True},
+            {"kind": "macd", "append": True},
+            {"kind": "sma", "length": 50, "append": True},
+            {"kind": "rsi", "append": True},
+        ]
+    )
+
     def apply_ta(df):
-        logger.info(f"[DEBUG] apply_ta: Processing permno {df['permno'].iloc[0]} with shape {df.shape}")
-        df.ta.atr(append=True)
-        df.ta.adx(append=True)
-        df.ta.ema(length=20, append=True)
-        df.ta.macd(append=True)
-        df.ta.sma(length=50, append=True)
+        # logger.info(f"[DEBUG] apply_ta: Processing permno {df['permno'].iloc[0]} with shape {df.shape}")
+        df.ta.strategy(ta_strategy)
         df['HURST'] = calculate_hurst_exponent(df['close'].values)
-        df.ta.rsi(append=True)
         return df
 
     daily_with_ta = daily_df.groupby('permno', group_keys=False).apply(apply_ta)
+    del daily_df # Free up memory
 
     monthly_ta = daily_with_ta.groupby('permno').apply(
         lambda df: df.set_index('date').resample('M').last()
     ).drop(columns='permno', errors='ignore').reset_index()
     monthly_ta['date'] = monthly_ta['date'] + pd.offsets.MonthEnd(0)
+    del daily_with_ta # Free up memory
 
     ta_feature_columns = ['ATRr_14', 'ADX_14', 'DMP_14', 'DMN_14', 'EMA_20', 'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9', 'SMA_50', 'HURST', 'RSI_14']
 
     final_df = pd.merge(final_df, monthly_ta[['permno', 'date'] + ta_feature_columns], on=['permno', 'date'], how='left')
+    del monthly_ta # Free up memory
 
     final_df = final_df.dropna(subset=['target_return'])
 
@@ -150,9 +220,9 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     if config.USE_CACHING:
         os.makedirs(config.CACHE_DIR, exist_ok=True)
         final_df.to_feather(cache_path)
-        logger.info(f"Feature dataset cached successfully: {cache_path}")
+        #logger.info(f"Feature dataset cached successfully: {cache_path}")
 
-    logger.info("Feature dataset creation complete.")
+    #logger.info("Feature dataset creation complete.")
     return final_df
 
 def filter_liquid_universe(daily_df, all_permnos, monthly_dates, min_avg_value=1_000_000, window_months=3):
@@ -185,7 +255,7 @@ def filter_liquid_universe(daily_df, all_permnos, monthly_dates, min_avg_value=1
         avg_daily_value = liquidity_df.groupby('permno')['value'].mean()
         liquid_permnos = avg_daily_value[avg_daily_value >= min_avg_value].index.tolist()
         liquid_universe_dict[rebalance_date] = liquid_permnos
-        logger.info(f"{rebalance_date.strftime('%Y-%m-%d')} 기준 {len(all_permnos)} permnos -> {len(liquid_permnos)} liquid permnos.")
+        #logger.info(f"{rebalance_date.strftime('%Y-%m-%d')} 기준 {len(all_permnos)} permnos -> {len(liquid_permnos)} liquid permnos.")
     return liquid_universe_dict
 
 if __name__ == '__main__':
@@ -210,13 +280,13 @@ def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
     df = daily_df.copy()
     if 'close' not in df.columns:
         if 'prc' in df.columns:
-            logger.info("'close' column not found, but 'prc' column found. Using 'prc' as 'close'.")
+            #logger.info("'close' column not found, but 'prc' column found. Using 'prc' as 'close'.")
             df['close'] = df['prc']
         elif 'vwretd' in df.columns:
-            logger.warning("'close' and 'prc' columns not found. Generating a virtual close price based on 'vwretd'.")
+            #logger.warning("'close' and 'prc' columns not found. Generating a virtual close price based on 'vwretd'.")
             df['close'] = df.groupby('permno')['vwretd'].transform(lambda x: (1 + x).cumprod())
         else:
-            logger.error("Neither 'close', 'prc', nor 'vwretd' found. Cannot generate close price.")
+            #logger.error("Neither 'close', 'prc', nor 'vwretd' found. Cannot generate close price.")
             raise ValueError("Missing required price data for 'close' column.")
     if 'high' not in df.columns:
         df['high'] = df['close']
@@ -229,26 +299,38 @@ def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
     df.fillna(method='ffill', inplace=True)
 
     def apply_ta(group):
-        group.ta.atr(append=True)
-        group.ta.adx(append=True)
-        group.ta.ema(length=20, append=True)
-        group.ta.macd(append=True)
-        group.ta.sma(length=50, append=True)
+        # Define a pandas_ta strategy for efficiency
+        ta_strategy = ta.Strategy(
+            name="custom_ta_strategy_daily",
+            description="A collection of daily technical analysis indicators",
+            ta=[
+                {"kind": "atr", "append": True},
+                {"kind": "adx", "append": True},
+                {"kind": "ema", "length": 20, "append": True},
+                {"kind": "macd", "append": True},
+                {"kind": "sma", "length": 50, "append": True},
+                {"kind": "rsi", "append": True},
+            ]
+        )
+        group.ta.strategy(ta_strategy)
         group['HURST'] = calculate_hurst_exponent(group['close'].values)
-        group.ta.rsi(append=True)
         return group
 
-    logger.info("Generating daily technical analysis indicators...")
+    # logger.info("Generating daily technical analysis indicators...")
     df_with_ta = df.groupby('permno', group_keys=False).apply(apply_ta)
+    del df # Free up memory
     
     ff_daily = ff_df.set_index('date').resample('D').ffill().reset_index()
     vix_daily = vix_df.copy()
     vix_daily.rename(columns={'^VIX': 'avg_vix'}, inplace=True)
     vix_daily['vol_of_vix'] = vix_daily['avg_vix'].rolling(window=21).std()
+    del ff_df, vix_df # Free up memory
 
     macro_daily_df = pd.merge(vix_daily[['date', 'avg_vix', 'vol_of_vix']], ff_daily, on='date', how='left')
+    del vix_daily, ff_daily # Free up memory
     
     final_df = pd.merge(df_with_ta, macro_daily_df, on='date', how='left')
+    del df_with_ta, macro_daily_df # Free up memory
 
     final_df['realized_vol'] = final_df.groupby('permno')['vwretd'].transform(lambda x: x.rolling(window=21).std())
 
@@ -264,7 +346,7 @@ def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
     
     final_df[['realized_vol', 'intra_month_mdd']] = final_df.groupby('permno')[['realized_vol', 'intra_month_mdd']].ffill()
 
-    logger.info("Creating target variables for predicting 20 trading days ahead...")
+    # logger.info("Creating target variables for predicting 20 trading days ahead...")
     indicator_features = ['ATRr_14', 'ADX_14', 'EMA_20', 'MACD_12_26_9', 'SMA_50', 'HURST', 'RSI_14']
     
     for col in indicator_features:
@@ -277,9 +359,12 @@ def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
     final_df = final_df.dropna(subset=['target_return'])
     final_df = final_df.reset_index(drop=True)
 
+    # Optimize memory usage before caching
+    final_df = _optimize_df_memory(final_df)
+
     if config.USE_CACHING:
         final_df.to_feather(cache_path)
-        logger.info(f"Daily feature dataset cached successfully: {cache_path}")
+        # logger.info(f"Daily feature dataset cached successfully: {cache_path}")
 
-    logger.info("Daily feature dataset for TCN-SVR created successfully.")
+    # logger.info("Daily feature dataset for TCN-SVR created successfully.")
     return final_df

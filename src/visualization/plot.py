@@ -99,6 +99,7 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
         ]
         panel_a_df = panel_a_df.reindex(ordered_index_a)
         _save_df_as_image(panel_a_df, 'table_1_monthly_statistics.png')
+        panel_a_df.to_csv(os.path.join(OUTPUT_DIR, 'table_1_monthly_statistics.csv'))
 
 # --- 패널 (b): 연환산 리스크-수익 지표 ---
     panel_b_data = {}
@@ -137,6 +138,7 @@ def generate_strategy_performance_summary(returns_df, avg_turnover_dict):
         ]
         panel_b_df = panel_b_df.reindex(ordered_index_b)
         _save_df_as_image(panel_b_df, 'table_2_annualized_risk_metrics.png')
+        panel_b_df.to_csv(os.path.join(OUTPUT_DIR, 'table_2_annualized_risk_metrics.csv'))
 
 def generate_sub_period_analysis(returns_df, start_year, end_year):
     """기간별 성과 분석표 (논문의 Table 6 형식) 생성."""
@@ -188,6 +190,7 @@ def generate_sub_period_analysis(returns_df, start_year, end_year):
     if all_periods_data:
         final_df = pd.concat(all_periods_data, keys=[name for name in sub_periods.keys()])
         _save_df_as_image(final_df, 'table_6_sub_period_analysis.png')
+        final_df.to_csv(os.path.join(OUTPUT_DIR, 'table_6_sub_period_analysis.csv'))
 def generate_performance_tables(strategy_returns, benchmark_returns):
     logger.info("[generate_performance_tables] Function entry.")
     logger.info(f"[generate_performance_tables] Input: strategy_returns shape={strategy_returns.shape}, benchmark_returns shape={benchmark_returns.shape}")
@@ -258,6 +261,11 @@ def generate_factor_analysis_table(strategy_returns, ff_df):
     try:
         ff_df = ff_df.set_index('date')
         merged_data = pd.merge(strategy_returns, ff_df, left_index=True, right_index=True, how='inner')
+        
+        # Save the input data for the regression
+        merged_data.to_csv(os.path.join(OUTPUT_DIR, 'data_fama_french_regression_input.csv'))
+        logger.info(f"Success: Fama-French regression input data saved.")
+
         logger.info(f"[generate_factor_analysis_table] merged_data shape={merged_data.shape}")
         if merged_data.empty or len(merged_data) < 2:
             logger.warning("Stopping regression analysis due to insufficient data.")
@@ -313,6 +321,11 @@ def plot_underwater(strategy_returns):
         logger.info("[plot_underwater] Function exit (empty strategy_returns).")
         return
     try:
+        # Calculate and save underwater (drawdown) series
+        underwater_series = qs.stats.drawdown(strategy_returns)
+        underwater_series.to_csv(os.path.join(OUTPUT_DIR, 'data_underwater.csv'))
+        logger.info(f"Success: Underwater (drawdown) data saved.")
+
         fig = qs.plots.drawdown(strategy_returns, 
                                 savefig=os.path.join(OUTPUT_DIR, 'plot_2_underwater.png'))
         plt.close(fig)
@@ -331,6 +344,11 @@ def plot_additional_analytics(strategy_returns):
         logger.info("[plot_additional_analytics] Function exit (empty strategy_returns).")
         return
     try:
+        # Calculate and save monthly returns heatmap data
+        monthly_returns_table = qs.stats.monthly_returns(strategy_returns)
+        monthly_returns_table.to_csv(os.path.join(OUTPUT_DIR, 'data_monthly_returns_heatmap.csv'))
+        logger.info(f"Success: Monthly returns heatmap data saved.")
+
         fig = qs.plots.monthly_returns(strategy_returns, 
                                        savefig=os.path.join(OUTPUT_DIR, 'plot_3_monthly_returns.png'))
         plt.close(fig)
@@ -343,6 +361,11 @@ def plot_additional_analytics(strategy_returns):
     logger.info(f"[plot_additional_analytics] strategy_returns length: {len(strategy_returns)}, ROLLING_WINDOW: {ROLLING_WINDOW}")
     if len(strategy_returns) > ROLLING_WINDOW:
         try:
+            # Calculate and save rolling volatility
+            rolling_vol = qs.stats.rolling_volatility(strategy_returns, window=ROLLING_WINDOW)
+            rolling_vol.to_csv(os.path.join(OUTPUT_DIR, 'data_rolling_volatility.csv'))
+            logger.info(f"Success: Rolling volatility data saved.")
+
             fig = qs.plots.rolling_volatility(strategy_returns, 
                                               savefig=os.path.join(OUTPUT_DIR, 'plot_4_rolling_volatility.png'))
             plt.close(fig)
@@ -351,6 +374,11 @@ def plot_additional_analytics(strategy_returns):
             logger.error(f"Failed: Could not generate rolling volatility plot: {e}")
             logger.error(traceback.format_exc())
         try:
+            # Calculate and save rolling sharpe
+            rolling_sharpe = qs.stats.rolling_sharpe(strategy_returns, window=ROLLING_WINDOW)
+            rolling_sharpe.to_csv(os.path.join(OUTPUT_DIR, 'data_rolling_sharpe.csv'))
+            logger.info(f"Success: Rolling Sharpe ratio data saved.")
+
             fig = qs.plots.rolling_sharpe(strategy_returns, 
                                           savefig=os.path.join(OUTPUT_DIR, 'plot_5_rolling_sharpe.png'))
             plt.close(fig)

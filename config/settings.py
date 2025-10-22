@@ -12,12 +12,12 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2024
+START_YEAR = 2010
 END_YEAR = 2024
 
 # ETF Ranking Feature Settings
 USE_ETF_RANKING = True
-TOP_N_ETFS = 3
+TOP_N_ETFS = 100  # Reduced for faster processing
 
 # --- Data File Paths ---
 try:
@@ -26,6 +26,13 @@ try:
 except FileNotFoundError:
     print(f"Warning: etf_costs.json not found in {DATA_DIR}. Using empty costs.")
     ETF_COSTS = {}
+
+# GPU Settings
+GPU_SETTINGS = {
+    'use_gpu': True,  # GPU 사용 여부
+    'gpu_id': 0,      # 사용할 GPU 번호 (0, 1, 2, ...)
+    'force_cpu': False  # True로 설정하면 GPU가 있어도 CPU 사용
+}
 
 # Model Parameter Settings
 MODEL_PARAMS = {
@@ -42,30 +49,30 @@ MODEL_PARAMS = {
     },
 
     # ETF Ranking Parameters
-    'ranking_lookback_years': 3,  # Only use last N years for ranking features (None for all)
+    'ranking_lookback_years': 5,  # Only use last N years for ranking features (None for all)
     'ranking_cache': True,        # Enable disk cache for monthly ranking results
 
     # TCN-SVR Model Parameters
     'use_tcn_svr': True,
     'tcn_svr_params': {
         'tau': 1.0,
-        'lookback_window': 48,
+                'lookback_window': 120,
         'lookback_window_step': 6,
         'num_channels_step': 8,
         # Lighter default model for faster monthly training
     # Model strength controls (adjust for heavier training)
-    'num_channels': [32, 64],
+    'num_channels': [64, 512],
     'kernel_size': 3,
     'dropout': 0.3,
     'base_uncertainty': 0.05,
-    'epochs': 100,
-    'lr': 0.001,
-    'early_stopping_patience': 12,
-        'early_stopping_min_delta': 0.0001,
+    'epochs': 1500,
+    'lr': 0.0001,
+    'early_stopping_patience': 80,
+        'early_stopping_min_delta': 0.00001,
         # Limit how much history to use for training per permno in daily rows (None = all)
         'train_window_rows': 720,
     # Optimization toggles
-    'warm_start': True,
+    'warm_start': False,
     'use_lag_features': True,
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
@@ -77,16 +84,20 @@ MODEL_PARAMS = {
         # Use 1 for GPU, or 2~4 for CPU-only environments
         'optuna_n_jobs': 1,
         # Optuna search space parameters
-        'lookback_window_min': 24,
-        'num_channels_min': 16,
-        'num_channels_max': 64,
+        'lookback_window_min': 120,
+        'num_channels_min': 128,
+        'num_channels_max': 1024,
         'dropout_min': 0.1,
         'dropout_max': 0.5,
         'dropout_step': 0.1,
         'svr_C_min': 1.0,
         'svr_C_max': 100.0,
         'svr_gamma_min': 0.01,
-        'svr_gamma_max': 1.0
+        'svr_gamma_max': 1.0,
+        'loss_function': 'huber',
+        'huber_delta': 1.0,
+        'huber_delta_min': 0.1,
+        'huber_delta_max': 1.5
     }}
 
 # Data Caching Settings
@@ -100,8 +111,9 @@ STATIONARITY_SIGNIFICANCE_LEVEL = 0.05
 USE_DYNAMIC_OMEGA = True
 
 # If True, constrains the portfolio's monthly turnover to be below MAX_TURNOVER
-USE_TURNOVER_CONSTRAINT = False
-MAX_TURNOVER = 0.40
+USE_TURNOVER_CONSTRAINT = True
+MAX_TURNOVER = 0.20  # 20%로 더 엄격하게 제한
+
 
 # Benchmark list settings for comparative analysis
 # None represents a 1/N portfolio (equal weight on all assets) benchmark

@@ -71,6 +71,15 @@ class TCN_SVR_Objective:
             self.config_model_params['tcn_svr_params']['svr_gamma_max'], 
             log=True
         )
+        loss_function = trial.suggest_categorical('loss_function', ['huber', 'mse'])
+        huber_delta = 1.0
+        if loss_function == 'huber':
+            huber_delta = trial.suggest_float(
+                'huber_delta',
+                self.config_model_params['tcn_svr_params']['huber_delta_min'],
+                self.config_model_params['tcn_svr_params']['huber_delta_max'],
+                log=True
+            )
 
         if self.end_date:
             tuning_df = self.full_feature_df[self.full_feature_df['date'] < self.end_date].copy()
@@ -106,8 +115,24 @@ class TCN_SVR_Objective:
         y_train_indicators_seq = y_seq_combined[:, -len(self.indicator_features)-1:-1]
         y_train_returns_seq = y_seq_combined[:, -1]
 
-        X_train_tensor = torch.from_numpy(X_train_seq).float()
-        y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
+        # 튜닝 과정에도 정규화 적용 (view_generator.py와 동일하게)
+        from sklearn.preprocessing import StandardScaler
+        
+        # X 데이터 정규화
+        scaler_X = StandardScaler()
+        X_train_scaled = scaler_X.fit_transform(X_train_seq.reshape(-1, X_train_seq.shape[-1]))
+        X_train_scaled = X_train_scaled.reshape(X_train_seq.shape)
+        
+        # y 데이터 정규화
+        scaler_y = StandardScaler()
+        y_train_scaled = scaler_y.fit_transform(y_train_indicators_seq)
+        
+        # 수익률도 정규화
+        scaler_returns = StandardScaler()
+        y_train_returns_scaled = scaler_returns.fit_transform(y_train_returns_seq.reshape(-1, 1)).flatten()
+        
+        X_train_tensor = torch.from_numpy(X_train_scaled).float()
+        y_train_indicators_tensor = torch.from_numpy(y_train_scaled).float()
 
         model = TCN_SVR_Model(
             input_size=len(self.all_features),
@@ -117,7 +142,9 @@ class TCN_SVR_Objective:
             dropout=tcn_dropout,
             lookback_window=tcn_lookback_window,
             svr_C=svr_C,
-            svr_gamma=svr_gamma
+            svr_gamma=svr_gamma,
+            loss_function=loss_function,
+            huber_delta=huber_delta
         )
         model.optimizer = torch.optim.Adam(model.net.parameters(), lr=tcn_lr)
 
@@ -127,7 +154,7 @@ class TCN_SVR_Objective:
         model.fit(
             X_train_tensor,
             y_train_indicators_tensor,
-            y_train_returns_seq,
+            y_train_returns_scaled,  # 정규화된 수익률 사용
             epochs=tcn_epochs,
             patience=self.config_model_params['tcn_svr_params']['early_stopping_patience'],
             min_delta=self.config_model_params['tcn_svr_params']['early_stopping_min_delta']
@@ -141,8 +168,29 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
     logger.info(f"TCN-SVR Hyperparameter Tuning started. Using data up to {end_date if end_date else 'the end'}.")
     
     objective = TCN_SVR_Objective(full_feature_df, config.MODEL_PARAMS, end_date=end_date)
-    pruner = MedianPruner(n_startup_trials=max(5, n_trials // 3), n_warmup_steps=0)
-    study = optuna.create_study(direction="minimize", pruner=pruner, sampler=optuna.samplers.TPESampler())
+    study = optuna.create_study(direction="minimize", sampler=optuna.samplers.CmaEsSampler(seed=42))
+    
+    # Warm-start Optuna with parameters from the previous month's best trial, if available
+    best_params_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')
+    if os.path.exists(best_params_path):
+        try:
+            with open(best_params_path, 'r') as f:
+                previous_best_params = json.load(f)
+            
+            # Prepare parameters for enqueuing
+            enqueued_params = {
+                'lookback_window': previous_best_params.get('lookback_window'),
+                'num_channels_layer1': previous_best_params.get('num_channels')[0],
+                'num_channels_layer2': previous_best_params.get('num_channels')[1],
+                'dropout': previous_best_params.get('dropout'),
+                'svr_C': previous_best_params.get('svr_C'),
+                'svr_gamma': previous_best_params.get('svr_gamma'),
+            }
+            # Enqueue the previous best trial
+            study.enqueue_trial(enqueued_params)
+            logger.info(f"Warm-started Optuna study with previous best parameters: {enqueued_params}")
+        except Exception as e:
+            logger.warning(f"Failed to warm-start Optuna study: {e}")
     study.optimize(objective, n_trials=n_trials, n_jobs=config.MODEL_PARAMS['tcn_svr_params']['optuna_n_jobs'])
 
     logger.info("Tuning finished.")
@@ -160,6 +208,8 @@ def run_tuning(full_feature_df, n_trials=4, end_date=None):
         'lr': config.MODEL_PARAMS['tcn_svr_params']['lr'],
         'svr_C': best_params.get('svr_C', config.MODEL_PARAMS['tcn_svr_params'].get('svr_C_min', 1.0)),
         'svr_gamma': best_params.get('svr_gamma', config.MODEL_PARAMS['tcn_svr_params'].get('svr_gamma_min', 0.01)),
+        'loss_function': best_params.get('loss_function', config.MODEL_PARAMS['tcn_svr_params'].get('loss_function', 'huber')),
+        'huber_delta': best_params.get('huber_delta', config.MODEL_PARAMS['tcn_svr_params'].get('huber_delta', 1.0)),
     }
 
     output_path = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME, 'best_tcn_svr_params.json')
