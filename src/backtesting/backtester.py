@@ -232,7 +232,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                     analysis_date=analysis_date, 
                     permnos=current_permnos, 
                     full_feature_df=ml_features_df[ml_features_df['permno'].isin(current_permnos)],
-                    model_params=active_model_params,
+                    model_params=active_model_params
                 )
                 weights, _ = bl_portfolio_model.get_black_litterman_portfolio(
                     analysis_date=analysis_date, P=P, Q=Q, Omega=Omega, 

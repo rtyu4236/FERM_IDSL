@@ -12,7 +12,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2024
+START_YEAR = 2015
 END_YEAR = 2024
 
 # ETF Ranking Feature Settings
