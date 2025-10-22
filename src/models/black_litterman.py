@@ -45,7 +45,7 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno=84398)
 class BlackLittermanPortfolio:
     def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_permno):
         logger.info("[BlackLittermanPortfolio.__init__] Function entry.")
-        logger.info(f"[BlackLittermanPortfolio.__init__] Input: all_returns_df shape={all_returns_df.shape}, full_monthly_df shape={full_monthly_df.shape}, ff_df shape={ff_df.shape}, lookback_months={lookback_months}, tau={tau}, market_proxy_permno={market_proxy_permno}")
+        # logger.info(f"[BlackLittermanPortfolio.__init__] Input: all_returns_df shape={all_returns_df.shape}, full_monthly_df shape={full_monthly_df.shape}, ff_df shape={ff_df.shape}, lookback_months={lookback_months}, tau={tau}, market_proxy_permno={market_proxy_permno}")
         self.all_returns_df = all_returns_df
         self.ff_df = ff_df
         self.expense_ratios = expense_ratios

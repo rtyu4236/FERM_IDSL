@@ -4,7 +4,7 @@ import os
 import json
 import traceback
 from src.data_processing import manager as data_manager
-from src.models import view_generator as ml_view_generator
+from src.models import view_generator_new as ml_view_generator
 from src.models.black_litterman import BlackLittermanPortfolio
 import quantstats as qs
 from config import settings as config
@@ -128,6 +128,18 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     import inspect
     sig = inspect.signature(run_backtest)
     use_liquid_dict = 'liquid_universe_dict' in sig.parameters
+    
+    model = TCN_SVR_Model(
+            input_size=len(all_features),
+            output_size=len(indicator_features),
+            num_channels=model_params['num_channels'],
+            kernel_size=model_params['kernel_size'],
+            dropout=model_params['dropout'],
+            lookback_window=model_params['lookback_window'],
+            svr_C=model_params.get('svr_C', 1.0),
+            svr_gamma=model_params.get('svr_gamma', 'scale'),
+            lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
+        )
 
     for idx, analysis_date in enumerate(backtest_dates[:-1]):
         logger.info(f"\n--- Processing {analysis_date.strftime('%Y-%m')} ---")
@@ -211,7 +223,6 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
 
         bl_portfolio_model = BlackLittermanPortfolio(
             all_returns_df=monthly_df_filtered,
-            full_monthly_df=monthly_df,
             ff_df=ff_df,
             expense_ratios=filtered_costs,
             lookback_months=active_model_params.get('lookback_window', 24),
@@ -233,7 +244,8 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                     analysis_date=analysis_date, 
                     permnos=current_permnos, 
                     full_feature_df=ml_features_df[ml_features_df['permno'].isin(current_permnos)],
-                    model_params=active_model_params
+                    model_params=active_model_params,
+                    model=model
                 )
                 weights, _ = bl_portfolio_model.get_black_litterman_portfolio(
                     analysis_date=analysis_date, P=P, Q=Q, Omega=Omega, 
