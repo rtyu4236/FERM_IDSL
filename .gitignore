@@ -9,3 +9,4 @@ data/*.csv
 *.DS_Store
 __MACOSX/
 fin_env/
+data/*
