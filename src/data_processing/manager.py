@@ -177,7 +177,7 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
     daily_df.fillna(method='ffill', inplace=True)
 
     # Define a pandas_ta strategy for efficiency
-    ta_strategy = ta.Strategy(
+    ta_strategy = ta.Study(
         name="custom_ta_strategy",
         description="A collection of technical analysis indicators",
         ta=[
@@ -192,7 +192,7 @@ def create_feature_dataset(daily_df, monthly_df, vix_df, ff_df):
 
     def apply_ta(df):
         # logger.info(f"[DEBUG] apply_ta: Processing permno {df['permno'].iloc[0]} with shape {df.shape}")
-        df.ta.strategy(ta_strategy)
+        df.ta.study(ta_strategy)
         df['HURST'] = calculate_hurst_exponent(df['close'].values)
         return df
 
@@ -300,7 +300,7 @@ def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
 
     def apply_ta(group):
         # Define a pandas_ta strategy for efficiency
-        ta_strategy = ta.Strategy(
+        ta_strategy = ta.Study(
             name="custom_ta_strategy_daily",
             description="A collection of daily technical analysis indicators",
             ta=[
@@ -312,7 +312,7 @@ def create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df):
                 {"kind": "rsi", "append": True},
             ]
         )
-        group.ta.strategy(ta_strategy)
+        group.ta.study(ta_strategy)
         group['HURST'] = calculate_hurst_exponent(group['close'].values)
         return group
 

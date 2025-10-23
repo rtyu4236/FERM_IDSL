@@ -3,6 +3,7 @@ import json
 from copy import deepcopy
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(ROOT_DIR)
 DATA_DIR = os.path.join(ROOT_DIR, 'data')
 CACHE_DIR = os.path.join(ROOT_DIR, 'cache')
 OUTPUT_DIR = os.path.join(ROOT_DIR, 'output')
@@ -12,7 +13,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --- Main Settings ---
-START_YEAR = 2010
+START_YEAR = 2024
 END_YEAR = 2024
 
 # ETF Ranking Feature Settings
@@ -77,7 +78,7 @@ MODEL_PARAMS = {
     # Keep at most this many lag features if set (e.g., 64). None uses all available.
     'max_lag_features': 64,
         # Hyperparameter tuning controls
-        'tune_trials_per_month': 5,
+        'tune_trials_per_month': 1,
         # Tune every K months (reduce monthly overhead). 1 = every month
         'tune_every_k_months': 1,
         # Keep modest parallelism to avoid oversubscription on shared machines
@@ -86,7 +87,7 @@ MODEL_PARAMS = {
         # Optuna search space parameters
         'lookback_window_min': 120,
         'num_channels_min': 128,
-        'num_channels_max': 1024,
+        'num_channels_max': 768,
         'dropout_min': 0.1,
         'dropout_max': 0.5,
         'dropout_step': 0.1,
