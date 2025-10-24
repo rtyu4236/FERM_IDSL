@@ -82,7 +82,7 @@ class TCN_SVR_Model:
         logger.info(f"[TCN_SVR_Model.__init__] SVR model initialized with C={svr_C} and gamma={svr_gamma}. Type: {type(self.svr_model)}")
         logger.info("[TCN_SVR_Model.__init__] Function exit.")
 
-    def fit(self, X_train_tensor, y_train_indicators_tensor, y_train_returns_numpy, epochs=50, patience=10, min_delta=0.0001):
+    def fit(self, X_train_tensor, y_train_indicators_tensor, y_train_returns_numpy, lr=0.0001, epochs=50, patience=10, min_delta=0.0001):
         logger.info("[TCN_SVR_Model.fit] Function entry.")
         logger.info(f"[TCN_SVR_Model.fit] Input: X_train_tensor shape={X_train_tensor.shape}, dtype={X_train_tensor.dtype}")
         logger.info(f"[TCN_SVR_Model.fit] Input: y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, dtype={y_train_indicators_tensor.dtype}")
@@ -155,7 +155,8 @@ class TCN_SVR_Model:
                     logger.info(f"[TCN_SVR_Model.fit] New best validation loss: {best_loss:.4f}")
                 else:
                     patience_counter += 1
-                    logger.info(f"[TCN_SVR_Model.fit] Validation loss not improved. Patience counter: {patience_counter}")
+                    if patience_counter % 30 == 0:
+                        logger.info(f"[TCN_SVR_Model.fit] Validation loss not improved. Patience counter: {patience_counter}")
 
                 if patience_counter >= patience:
                     logger.info(f"[TCN_SVR_Model.fit] Early stopping triggered after {epoch+1} epochs.")
@@ -200,3 +201,5 @@ class TCN_SVR_Model:
         logger.info(f"[TCN_SVR_Model.predict] Predicted return shape={predicted_return.shape}, dtype={predicted_return.dtype}")
         logger.info("[TCN_SVR_Model.predict] Function exit.")
         return predicted_return
+
+    

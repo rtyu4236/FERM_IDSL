@@ -8,6 +8,7 @@ from src.backtesting import backtester
 from config import settings as config
 from src.utils import logger as logger_setup
 from src.data_processing import manager as data_manager
+from src.general_tcn_svr import general_tcn_svr_model
     
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -52,7 +53,23 @@ if __name__ == '__main__':
         liquid_universe_dict[filter_date] = history_filtered_permnos
     # 최초 universe는 첫 월의 permnos로 설정 (비상시)
     initial_universe_permnos = liquid_universe_dict[monthly_dates[0]]
-
+    
+    general_tcn_svr = general_tcn_svr_model.train_general_tcn_svr(
+        daily_df=daily_df,
+        monthly_df=monthly_df,
+        vix_df=vix_df,
+        ff_df=ff_df,
+        all_permnos=initial_universe_permnos,
+        train_start_year=2023,
+        train_end_year=2023,
+        model_params=config.MODEL_PARAMS,
+        use_etf_ranking=args.ranking,
+        top_n=config.TOP_N_ETFS,
+        run_rolling_tune=args.tune,
+        liquid_universe_dict=liquid_universe_dict
+    )
+    
+    
     # 3. Pass all data and settings to the backtester and run
     ff_df_from_backtest, avg_turnover, start_year_backtest, end_year_backtest = backtester.run_backtest(
         daily_df=daily_df,
@@ -68,7 +85,8 @@ if __name__ == '__main__':
         use_etf_ranking=args.ranking,
         top_n=config.TOP_N_ETFS,
         run_rolling_tune=args.tune,
-        liquid_universe_dict=liquid_universe_dict
+        liquid_universe_dict=liquid_universe_dict,
+        model=general_tcn_svr
     )
     logger_setup.logger.info("backtester.run_backtest completed.")
 

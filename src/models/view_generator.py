@@ -223,7 +223,7 @@ def _create_sequences(data, lookback_window):
     logger.info("[_create_sequences] Function exit.")
     return np.array(xs), np.array(ys)
 
-def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params):
+def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params, model):
     logger.info("[generate_tcn_svr_views] Function entry.")
     logger.info(f"[generate_tcn_svr_views] Input: analysis_date={analysis_date}, permnos len={len(permnos)}, full_feature_df shape={full_feature_df.shape}, model_params={model_params}")
     
@@ -310,7 +310,7 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
              
         X_test_seq = np.array([test_feature_window_df[all_features].values])
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_test_seq shape={X_test_seq.shape}")
-        # -----------------------------------------------
+        # -------------------------------mod----------------
 
         # --- [수정 5] 정규화 (학습 데이터로만 fit) ---
         from sklearn.preprocessing import StandardScaler
@@ -338,78 +338,13 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
         X_test_tensor = torch.from_numpy(X_test_scaled).float()
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_tensor shape={X_train_tensor.shape}, y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, X_test_tensor shape={X_test_tensor.shape}")
 
-        model = TCN_SVR_Model(
-            input_size=len(all_features),
-            output_size=len(indicator_features),
-            num_channels=model_params['num_channels'],
-            kernel_size=model_params['kernel_size'],
-            dropout=model_params['dropout'],
-            lookback_window=model_params['lookback_window'],
-            svr_C=model_params.get('svr_C', 1.0),
-            svr_gamma=model_params.get('svr_gamma', 'scale'),
-            lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
-        )
-        # Warm start: load previous TCN weights for this permno if architecture matches; else skip.
-        if model_params.get('warm_start', True):
-            sig = _tcn_signature(
-                input_size=len(all_features),
-                output_size=len(indicator_features),
-                num_channels=model_params['num_channels'],
-                kernel_size=model_params['kernel_size'],
-                lookback_window=model_params['lookback_window'],
-            )
-            cached_for_permno = _TCN_STATE_CACHE.get(permno)
-            loaded = False
-            if isinstance(cached_for_permno, dict):
-                # New-style cache: keyed by signature
-                cached_state = cached_for_permno.get(sig)
-                if cached_state is not None:
-                    compat = _filter_compatible_state(model, cached_state)
-                    if compat:
-                        try:
-                            model.net.load_state_dict(compat, strict=False)
-                            loaded = True
-                            logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} with matching signature.")
-                        except Exception as e:
-                            logger.warning(f"[generate_tcn_svr_views] Warm-start load failed for {permno} despite signature match: {e}")
-            else:
-                # Backward-compat: older cache stored raw state_dict directly.
-                cached_state = cached_for_permno
-                if cached_state is not None:
-                    compat = _filter_compatible_state(model, cached_state)
-                    if compat:
-                        try:
-                            model.net.load_state_dict(compat, strict=False)
-                            loaded = True
-                            logger.info(f"[generate_tcn_svr_views] Warm-started TCN for {permno} (compat keys only).")
-                        except Exception as e:
-                            logger.warning(f"[generate_tcn_svr_views] Warm-start (compat) failed for {permno}: {e}")
-            if not loaded:
-                logger.info(f"[generate_tcn_svr_views] Skipping warm-start for {permno} (no compatible cached weights for current architecture).")
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model initialized. Input size={len(all_features)}, Output size={len(indicator_features)}")
         model.fit(X_train_tensor, y_train_indicators_tensor, y_train_returns_scaled,
+                  lr=model_params.get('lr')*0.1,
                   epochs=model_params.get('epochs', 50),
                   patience=model_params.get('early_stopping_patience', 10),
                   min_delta=model_params.get('early_stopping_min_delta', 0.0001))
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: TCN_SVR_Model fitted.")
-        # Save state dict to cache for next month warm start (keyed by architecture signature)
-        if model_params.get('warm_start', True):
-            try:
-                sig = _tcn_signature(
-                    input_size=len(all_features),
-                    output_size=len(indicator_features),
-                    num_channels=model_params['num_channels'],
-                    kernel_size=model_params['kernel_size'],
-                    lookback_window=model_params['lookback_window'],
-                )
-                cache_bucket = _TCN_STATE_CACHE.setdefault(permno, {})
-                if isinstance(cache_bucket, dict):
-                    cache_bucket[sig] = model.net.state_dict()
-                else:
-                    # If stale format exists, replace with new dict format
-                    _TCN_STATE_CACHE[permno] = {sig: model.net.state_dict()}
-            except Exception:
-                pass
         
         # SVR 예측 (정규화된 값)
         prediction_normalized = model.predict(X_test_tensor)

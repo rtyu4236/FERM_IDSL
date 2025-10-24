@@ -5,7 +5,7 @@ import json
 import traceback
 from src.data_processing import manager as data_manager
 from src.models import view_generator as ml_view_generator
-from src.models.black_litterman import BlackLittermanPortfolio
+from src.models.black_litterman import BlackLittermanPortfolio, get_current_universe
 import quantstats as qs
 from config import settings as config
 from src.utils.logger import logger
@@ -85,14 +85,14 @@ def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_
         logger.error(traceback.format_exc())
         return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
 
-def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, liquid_universe_dict=None):
+def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, model, liquid_universe_dict=None):
     logger.info("[run_backtest] Function entry.")
     qs.extend_pandas()
 
     # Clear TCN warm start cache at the beginning of each backtest run
-    if model_params.get('use_tcn_svr', False) and model_params.get('tcn_svr_params', {}).get('warm_start', False):
-        logger.info("Clearing TCN warm start cache to ensure clean state...")
-        ml_view_generator.clear_tcn_cache()
+    # if model_params.get('use_tcn_svr', False) and model_params.get('tcn_svr_params', {}).get('warm_start', False):
+    #     logger.info("Clearing TCN warm start cache to ensure clean state...")
+    #     ml_view_generator.clear_tcn_cache()
 
     ml_features_df = data_manager.create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df)
     logger.info(f"[run_backtest] ML features created: ml_features_df shape={ml_features_df.shape}")
@@ -237,12 +237,17 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             all_returns_df=monthly_df_filtered,
             ff_df=ff_df,
             expense_ratios=filtered_costs,
-            lookback_months=active_model_params.get('lookback_window', 24),
+            lookback_months=active_model_params.get('lookback_window', 6), # 24
             tau=active_model_params.get('tau'),
             market_proxy_permno=current_model_params['market_proxy_permno']
         )
 
-        current_permnos, returns_pivot = bl_portfolio_model._get_current_universe(analysis_date)
+        current_permnos, returns_pivot = get_current_universe(
+            monthly_df_filtered, 
+            analysis_date, 
+            active_model_params.get('lookback_window', 6) # 24
+        )
+
         if not current_permnos:
             logger.warning(f"No viable permnos for {analysis_date.strftime('%Y-%m-%d')}. Skipping.")
             weights = pd.Series(dtype=float)
@@ -256,7 +261,8 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                     analysis_date=analysis_date, 
                     permnos=current_permnos, 
                     full_feature_df=ml_features_df[ml_features_df['permno'].isin(current_permnos)],
-                    model_params=active_model_params
+                    model_params=active_model_params,
+                    model=model
                 )
                 # Save P, Q, Omega matrices
                 output_dir = os.path.join(config.OUTPUT_DIR, logger.LOG_NAME)
