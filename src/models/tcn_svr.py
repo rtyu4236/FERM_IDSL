@@ -61,35 +61,35 @@ class TCN_SVR_Model:
         logger.info(f"[TCN_SVR_Model.__init__] SVR model initialized with C={svr_C} and gamma={svr_gamma}. Type: {type(self.svr_model)}")
         logger.info("[TCN_SVR_Model.__init__] Function exit.")
 
-    def fit(self, X_train_tensor, y_train_indicators_tensor, y_train_returns_numpy, epochs=50, patience=10, min_delta=0.0001):
+    def fit(self, all_X_train_tensors, all_y_train_indicators_tensor, all_y_train_returns_numpy, epochs=50, patience=10, min_delta=0.0001):
         logger.info("[TCN_SVR_Model.fit] Function entry.")
-        logger.info(f"[TCN_SVR_Model.fit] Input: X_train_tensor shape={X_train_tensor.shape}, dtype={X_train_tensor.dtype}")
-        logger.info(f"[TCN_SVR_Model.fit] Input: y_train_indicators_tensor shape={y_train_indicators_tensor.shape}, dtype={y_train_indicators_tensor.dtype}")
-        logger.info(f"[TCN_SVR_Model.fit] Input: y_train_returns_numpy shape={y_train_returns_numpy.shape}, dtype={y_train_returns_numpy.dtype}")
+        logger.info(f"[TCN_SVR_Model.fit] Input: X_train_tensor shape={all_X_train_tensors.shape}, dtype={all_X_train_tensors.dtype}")
+        logger.info(f"[TCN_SVR_Model.fit] Input: y_train_indicators_tensor shape={all_y_train_indicators_tensor.shape}, dtype={all_y_train_indicators_tensor.dtype}")
+        logger.info(f"[TCN_SVR_Model.fit] Input: y_train_returns_numpy shape={all_y_train_returns_numpy.shape}, dtype={all_y_train_returns_numpy.dtype}")
         logger.info(f"[TCN_SVR_Model.fit] Training TCN for {epochs} epochs with patience={patience}, min_delta={min_delta}")
 
         from sklearn.model_selection import train_test_split
         MIN_SAMPLES_FOR_SPLIT = 5
-        can_validate = X_train_tensor.shape[0] >= MIN_SAMPLES_FOR_SPLIT
+        can_validate = all_X_train_tensors.shape[0] >= MIN_SAMPLES_FOR_SPLIT
 
         # Move training tensors to device and cast to half precision if AMP is enabled
         if self.device.type == 'cuda' and self.use_amp:
-            X_train_tensor = X_train_tensor.to(self.device).half()
-            y_train_indicators_tensor = y_train_indicators_tensor.to(self.device).half()
+            all_X_train_tensors = all_X_train_tensors.to(self.device).half()
+            all_y_train_indicators_tensor = all_y_train_indicators_tensor.to(self.device).half()
         else:
-            X_train_tensor = X_train_tensor.to(self.device)
-            y_train_indicators_tensor = y_train_indicators_tensor.to(self.device)
+            all_X_train_tensors = all_X_train_tensors.to(self.device)
+            all_y_train_indicators_tensor = all_y_train_indicators_tensor.to(self.device)
 
         if can_validate:
             X_train_tcn, X_val_tcn, y_train_tcn, y_val_tcn = train_test_split(
-                X_train_tensor, y_train_indicators_tensor, test_size=0.2, shuffle=False
+                all_X_train_tensors, all_y_train_indicators_tensor, test_size=0.2, shuffle=False
             )
             logger.info(f"[TCN_SVR_Model.fit] TCN train split: X_train_tcn shape={X_train_tcn.shape}, y_train_tcn shape={y_train_tcn.shape}")
             logger.info(f"[TCN_SVR_Model.fit] TCN val split: X_val_tcn shape={X_val_tcn.shape}, y_val_tcn shape={y_val_tcn.shape}")
         else:
-            logger.warning(f"Not enough samples ({X_train_tensor.shape[0]}) to create a validation set. Skipping early stopping.")
-            X_train_tcn = X_train_tensor
-            y_train_tcn = y_train_indicators_tensor
+            logger.warning(f"Not enough samples ({all_X_train_tensors.shape[0]}) to create a validation set. Skipping early stopping.")
+            X_train_tcn = all_X_train_tensors
+            y_train_tcn = all_y_train_indicators_tensor
 
         best_loss = float('inf')
         patience_counter = 0
@@ -147,13 +147,13 @@ class TCN_SVR_Model:
         self.net.eval()
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=(self.device.type == 'cuda' and self.use_amp)):
-                predicted_indicators_train_tensor = self.net(X_train_tensor.permute(0, 2, 1))
+                predicted_indicators_train_tensor = self.net(all_X_train_tensors.permute(0, 2, 1))
         
         predicted_indicators_train_numpy = predicted_indicators_train_tensor.detach().cpu().numpy()
         logger.info(f"[TCN_SVR_Model.fit] Predicted indicators (train) shape={predicted_indicators_train_numpy.shape}, dtype={predicted_indicators_train_numpy.dtype}")
 
         logger.info("[TCN_SVR_Model.fit] Training SVR model.")
-        self.svr_model.fit(predicted_indicators_train_numpy, y_train_returns_numpy)
+        self.svr_model.fit(predicted_indicators_train_numpy, all_y_train_returns_numpy)
         logger.info("[TCN_SVR_Model.fit] SVR training complete. Function exit.")
 
     def predict(self, X_test_tensor):

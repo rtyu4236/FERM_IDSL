@@ -8,6 +8,7 @@ from src.backtesting import backtester
 from config import settings as config
 from src.utils import logger as logger_setup
 from src.data_processing import manager as data_manager
+from src.general_model import train_general_model
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     )
     # 5년 이상 거래 이력 필터 (각 월별로 적용)
     logger_setup.logger.info("Filtering universe by minimum history (5 years) for each month...")
-    MIN_MONTHS = 5 * 12
+    MIN_MONTHS = 5* 12
     for date in monthly_dates:
         filter_date = pd.to_datetime(date)
         permnos = liquid_universe_dict[filter_date]
@@ -54,6 +55,22 @@ if __name__ == '__main__':
     initial_universe_permnos = liquid_universe_dict[monthly_dates[0]]
 
     # 3. Pass all data and settings to the backtester and run
+
+
+    model = train_general_model.train_general_tcn_svr(
+        daily_df=daily_df,
+        monthly_df=monthly_df,
+        vix_df=vix_df,
+        ff_df=ff_df,
+        all_permnos=initial_universe_permnos,
+        train_start_year=2023,
+        train_end_year=2023,
+        model_params=config.MODEL_PARAMS,
+        use_etf_ranking=args.ranking,
+        run_rolling_tune=args.tune,
+        liquid_universe_dict=liquid_universe_dict
+    )
+
     ff_df_from_backtest, avg_turnover, start_year_backtest, end_year_backtest = backtester.run_backtest(
         daily_df=daily_df,
         monthly_df=monthly_df,
@@ -63,6 +80,7 @@ if __name__ == '__main__':
         start_year=config.START_YEAR,
         end_year=config.END_YEAR,
         etf_costs=config.ETF_COSTS,
+        model=model,
         model_params=config.MODEL_PARAMS,
         benchmark_permnos=config.BENCHMARK_PERMNOS,
         use_etf_ranking=args.ranking,

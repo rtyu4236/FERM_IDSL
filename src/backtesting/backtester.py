@@ -5,12 +5,13 @@ import json
 import traceback
 from src.data_processing import manager as data_manager
 from src.models import view_generator_new as ml_view_generator
-from src.models.black_litterman import BlackLittermanPortfolio
+from src.models.black_litterman import BlackLittermanPortfolio, get_current_universe
 import quantstats as qs
 from config import settings as config
 from src.utils.logger import logger
 from src.tuning import tcn_svr_tuner
 from src.models.etf_quant_ranker import ETFQuantRanker, create_etf_universe_from_daily
+from src.models.tcn_svr import TCN_SVR_Model
 
 def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permnos):
     logger.info(f"[_filter_config_by_permnos] Filtering configs for {len(all_available_permnos)} permnos.")
@@ -68,14 +69,14 @@ def create_one_over_n_benchmark_investable(monthly_df, target_dates, investable_
         logger.error(traceback.format_exc())
         return pd.Series(0.0, index=target_dates, name='1/N Portfolio')
 
-def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, liquid_universe_dict=None):
+def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, end_year, etf_costs, model, model_params, benchmark_permnos, use_etf_ranking, top_n, run_rolling_tune, liquid_universe_dict=None):
     logger.info("[run_backtest] Function entry.")
     qs.extend_pandas()
 
     # Clear TCN warm start cache at the beginning of each backtest run
-    if model_params.get('use_tcn_svr', False) and model_params.get('tcn_svr_params', {}).get('warm_start', False):
-        logger.info("Clearing TCN warm start cache to ensure clean state...")
-        ml_view_generator.clear_tcn_cache()
+    # if model_params.get('use_tcn_svr', False) and model_params.get('tcn_svr_params', {}).get('warm_start', False):
+    #     logger.info("Clearing TCN warm start cache to ensure clean state...")
+    #     ml_view_generator.clear_tcn_cache()
 
     ml_features_df = data_manager.create_daily_feature_dataset_for_tcn(daily_df, vix_df, ff_df)
     logger.info(f"[run_backtest] ML features created: ml_features_df shape={ml_features_df.shape}")
@@ -125,6 +126,18 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     ranking_selected_per_month = {} if use_etf_ranking else None
 
     # liquid_universe_dict 인자 지원
+    # model = TCN_SVR_Model(
+    #         input_size=15, # len(all_features),
+    #         output_size=7,# len(indicator_features),
+    #         num_channels=model_params['num_channels'],
+    #         kernel_size=model_params['kernel_size'],
+    #         dropout=model_params['dropout'],
+    #         lookback_window=model_params['lookback_window'],
+    #         svr_C=model_params.get('svr_C', 1.0),
+    #         svr_gamma=model_params.get('svr_gamma', 'scale'),
+    #         lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
+    #     )
+    
     import inspect
     sig = inspect.signature(run_backtest)
     use_liquid_dict = 'liquid_universe_dict' in sig.parameters
@@ -218,7 +231,10 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
             market_proxy_permno=current_model_params['market_proxy_permno']
         )
 
-        current_permnos, returns_pivot = bl_portfolio_model._get_current_universe(analysis_date)
+        current_permnos, returns_pivot = get_current_universe(
+            monthly_df_filtered, 
+            analysis_date, 
+            active_model_params.get('lookback_window', 24))
         if not current_permnos:
             logger.warning(f"No viable permnos for {analysis_date.strftime('%Y-%m-%d')}. Skipping.")
             weights = pd.Series(dtype=float)
@@ -232,6 +248,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
                     analysis_date=analysis_date, 
                     permnos=current_permnos, 
                     full_feature_df=ml_features_df[ml_features_df['permno'].isin(current_permnos)],
+                    model=model,
                     model_params=active_model_params
                 )
                 weights, _ = bl_portfolio_model.get_black_litterman_portfolio(
@@ -327,6 +344,7 @@ def run_backtest(daily_df, monthly_df, vix_df, ff_df, all_permnos, start_year, e
     _, filtered_benchmarks = _filter_config_by_permnos(all_permnos, etf_costs, benchmark_permnos)
     benchmark_returns_dict = {}
     valid_benchmark_permnos = [p for p in filtered_benchmarks if p is not None]
+    
     for permno in valid_benchmark_permnos:
         permno_returns_df = monthly_df[monthly_df['permno'] == permno]
         if permno_returns_df.empty:

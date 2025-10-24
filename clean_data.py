@@ -87,10 +87,10 @@ def verify_cleaning(file_name):
         print(f"Verification Failed: Found {num_duplicates} duplicates in {file_name}.")
 
 if __name__ == '__main__':
-    if clean_crsp_data('crsp_monthly_all.csv', 'crsp_monthly_cleaned.csv'):
-        verify_cleaning('crsp_monthly_cleaned.csv')
+    # if clean_crsp_data('crsp_monthly_all.csv', 'crsp_monthly_cleaned.csv'):
+    #     verify_cleaning('crsp_monthly_cleaned.csv')
     
-    if clean_crsp_data('crsp_daily_all.csv', 'crsp_daily_cleaned.csv'):
+    if clean_crsp_data('crsp_daily_all.csv', 'crsp_daily_all_cleaned.csv'):
         verify_cleaning('crsp_daily_cleaned.csv')
 
     print("\nProcess finished.")

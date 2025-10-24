@@ -42,6 +42,26 @@ def _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno=84398)
     logger.info("[_calculate_long_term_delta] Function exit.")
     return long_term_delta
 
+def get_current_universe(all_returns_df, analysis_date, lookback_months):
+    logger.info("[BlackLittermanPortfolio._get_current_universe] Function entry.")
+    logger.info(f"[BlackLittermanPortfolio._get_current_universe] Input: analysis_date={analysis_date}")
+    start_date = analysis_date - pd.DateOffset(months=lookback_months)
+    recent_data = all_returns_df[
+        (all_returns_df['date'] >= start_date) & 
+        (all_returns_df['date'] <= analysis_date)
+    ]
+    logger.info(f"[BlackLittermanPortfolio._get_current_universe] recent_data shape={recent_data.shape}")
+    permno_counts = recent_data.groupby('permno')['date'].nunique()
+    valid_permnos = permno_counts[permno_counts >= lookback_months].index.tolist()
+    logger.info(f"[BlackLittermanPortfolio._get_current_universe] valid_permnos count={len(valid_permnos)}")
+    current_returns_df = recent_data[recent_data['permno'].isin(valid_permnos)]
+    returns_pivot = current_returns_df.pivot_table(
+        index='date', columns='permno', values='total_return'
+    ).fillna(0)
+    logger.info(f"[BlackLittermanPortfolio._get_current_universe] returns_pivot shape={returns_pivot.shape}")
+    logger.info("[BlackLittermanPortfolio._get_current_universe] Function exit.")
+    return sorted(valid_permnos), returns_pivot
+
 class BlackLittermanPortfolio:
     def __init__(self, all_returns_df, ff_df, expense_ratios, lookback_months, tau, market_proxy_permno):
         logger.info("[BlackLittermanPortfolio.__init__] Function entry.")
@@ -55,26 +75,6 @@ class BlackLittermanPortfolio:
         self.default_delta = _calculate_long_term_delta(all_returns_df, ff_df, market_proxy_permno)
         logger.info(f"[BlackLittermanPortfolio.__init__] default_delta={self.default_delta}")
         logger.info("[BlackLittermanPortfolio.__init__] Function exit.")
-
-    def _get_current_universe(self, analysis_date):
-        logger.info("[BlackLittermanPortfolio._get_current_universe] Function entry.")
-        logger.info(f"[BlackLittermanPortfolio._get_current_universe] Input: analysis_date={analysis_date}")
-        start_date = analysis_date - pd.DateOffset(months=self.lookback_months)
-        recent_data = self.all_returns_df[
-            (self.all_returns_df['date'] >= start_date) & 
-            (self.all_returns_df['date'] <= analysis_date)
-        ]
-        logger.info(f"[BlackLittermanPortfolio._get_current_universe] recent_data shape={recent_data.shape}")
-        permno_counts = recent_data.groupby('permno')['date'].nunique()
-        valid_permnos = permno_counts[permno_counts >= self.lookback_months].index.tolist()
-        logger.info(f"[BlackLittermanPortfolio._get_current_universe] valid_permnos count={len(valid_permnos)}")
-        current_returns_df = recent_data[recent_data['permno'].isin(valid_permnos)]
-        returns_pivot = current_returns_df.pivot_table(
-            index='date', columns='permno', values='total_return'
-        ).fillna(0)
-        logger.info(f"[BlackLittermanPortfolio._get_current_universe] returns_pivot shape={returns_pivot.shape}")
-        logger.info("[BlackLittermanPortfolio._get_current_universe] Function exit.")
-        return sorted(valid_permnos), returns_pivot
 
     def _calculate_inputs(self, returns_pivot, analysis_date):
         logger.info("[BlackLittermanPortfolio._calculate_inputs] Function entry.")
@@ -136,7 +136,7 @@ class BlackLittermanPortfolio:
     def get_black_litterman_portfolio(self, analysis_date, P, Q, Omega, pre_calculated_inputs=None, max_weight=0.25, previous_weights=None):
         logger.info("[BlackLittermanPortfolio.get_black_litterman_portfolio] Function entry.")
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Input: analysis_date={analysis_date}, P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
-        current_permnos, returns_pivot = self._get_current_universe(analysis_date)
+        current_permnos, returns_pivot = get_current_universe(self.all_returns_df, analysis_date, lookback_months=self.lookback_months)
         logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] current_permnos count={len(current_permnos)}, returns_pivot shape={returns_pivot.shape}")
 
         if pre_calculated_inputs:

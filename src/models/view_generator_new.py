@@ -67,148 +67,182 @@ def train_volatility_model(permno, train_df, feature_cols):
     logger.info("[train_volatility_model] Function exit.")
     return model
 
-def generate_ml_views(analysis_date, permnos, full_feature_df, Sigma, tau, benchmark_permno, view_outperformance):
-    logger.info("[generate_ml_views] Function entry.")
-    logger.info(f"[generate_ml_views] Input: analysis_date={analysis_date}, permnos len={len(permnos)}, full_feature_df shape={full_feature_df.shape}, Sigma shape={Sigma.shape}, tau={tau}, benchmark_permno={benchmark_permno}, view_outperformance={view_outperformance}")
+# def generate_ml_views(analysis_date, permnos, full_feature_df, Sigma, tau, benchmark_permno, view_outperformance):
+#     logger.info("[generate_ml_views] Function entry.")
+#     logger.info(f"[generate_ml_views] Input: analysis_date={analysis_date}, permnos len={len(permnos)}, full_feature_df shape={full_feature_df.shape}, Sigma shape={Sigma.shape}, tau={tau}, benchmark_permno={benchmark_permno}, view_outperformance={view_outperformance}")
     
-    train_df = full_feature_df[full_feature_df['date'] < analysis_date]
-    features_for_prediction = full_feature_df[full_feature_df['date'] == analysis_date]
-    logger.info(f"[generate_ml_views] train_df shape: {train_df.shape}, features_for_prediction shape: {features_for_prediction.shape}")
+#     train_df = full_feature_df[full_feature_df['date'] < analysis_date]
+#     features_for_prediction = full_feature_df[full_feature_df['date'] == analysis_date]
+#     logger.info(f"[generate_ml_views] train_df shape: {train_df.shape}, features_for_prediction shape: {features_for_prediction.shape}")
 
-    if features_for_prediction.empty:
-        logger.warning("No features for prediction date, cannot generate views.")
-        logger.info("[generate_ml_views] Function exit (no features for prediction).")
-        return np.array([]), np.array([]), np.array([])
+#     if features_for_prediction.empty:
+#         logger.warning("No features for prediction date, cannot generate views.")
+#         logger.info("[generate_ml_views] Function exit (no features for prediction).")
+#         return np.array([]), np.array([]), np.array([])
 
-    predictions = {}
-    residual_variances = {}
+#     predictions = {}
+#     residual_variances = {}
     
-    for permno in permnos:
-        logger.info(f"[generate_ml_views] Processing permno: {permno}")
-        permno_train_df = train_df[train_df['permno'] == permno].set_index('date')
-        permno_features = features_for_prediction[features_for_prediction['permno'] == permno]
-        # logger.info(f"[generate_ml_views] PERMNO {permno}: permno_train_df shape={permno_train_df.shape}, permno_features shape={permno_features.shape}")
+#     for permno in permnos:
+#         logger.info(f"[generate_ml_views] Processing permno: {permno}")
+#         permno_train_df = train_df[train_df['permno'] == permno].set_index('date')
+#         permno_features = features_for_prediction[features_for_prediction['permno'] == permno]
+#         # logger.info(f"[generate_ml_views] PERMNO {permno}: permno_train_df shape={permno_train_df.shape}, permno_features shape={permno_features.shape}")
         
-        MIN_TRAIN_SAMPLES = 15
-        if len(permno_train_df) < MIN_TRAIN_SAMPLES:
-            logger.warning(f"Skipping {permno} due to insufficient training data: {len(permno_train_df)} samples < {MIN_TRAIN_SAMPLES}")
-            continue
+#         MIN_TRAIN_SAMPLES = 15
+#         if len(permno_train_df) < MIN_TRAIN_SAMPLES:
+#             logger.warning(f"Skipping {permno} due to insufficient training data: {len(permno_train_df)} samples < {MIN_TRAIN_SAMPLES}")
+#             continue
 
-        if permno_train_df.empty or permno_features.empty:
-            logger.warning(f"[generate_ml_views] PERMNO {permno}: Empty train_df or features_for_prediction, skipping.")
-            continue
+#         if permno_train_df.empty or permno_features.empty:
+#             logger.warning(f"[generate_ml_views] PERMNO {permno}: Empty train_df or features_for_prediction, skipping.")
+#             continue
 
-        try:
-            original_features = [
-                'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
-                'Mkt-RF', 'SMB', 'HML', 'RF'
-            ]
-            lag_features = [col for col in permno_train_df.columns if '_lag_' in col]
-            arima_features = original_features + lag_features
-            arima_features = [f for f in arima_features if f in permno_train_df.columns]
-            logger.info(f"[generate_ml_views] PERMNO {permno}: ARIMAX features len={len(arima_features)}: {arima_features}")
+#         try:
+#             original_features = [
+#                 'intra_month_mdd', 'avg_vix', 'vol_of_vix', 
+#                 'Mkt-RF', 'SMB', 'HML', 'RF'
+#             ]
+#             lag_features = [col for col in permno_train_df.columns if '_lag_' in col]
+#             arima_features = original_features + lag_features
+#             arima_features = [f for f in arima_features if f in permno_train_df.columns]
+#             logger.info(f"[generate_ml_views] PERMNO {permno}: ARIMAX features len={len(arima_features)}: {arima_features}")
 
-            model = train_volatility_model(permno, permno_train_df, arima_features)
+#             model = train_volatility_model(permno, permno_train_df, arima_features)
             
-            X_pred_df = permno_features[arima_features]
-            # logger.info(f"[generate_ml_views] PERMNO {permno}: X_pred_df shape={X_pred_df.shape}")
+#             X_pred_df = permno_features[arima_features]
+#             # logger.info(f"[generate_ml_views] PERMNO {permno}: X_pred_df shape={X_pred_df.shape}")
 
-            X_pred = np.array(X_pred_df)
-            if X_pred.ndim == 1:
-                X_pred = X_pred.reshape(-1, 1)
-            # logger.info(f"[generate_ml_views] PERMNO {permno}: X_pred shape={X_pred.shape}")
+#             X_pred = np.array(X_pred_df)
+#             if X_pred.ndim == 1:
+#                 X_pred = X_pred.reshape(-1, 1)
+#             # logger.info(f"[generate_ml_views] PERMNO {permno}: X_pred shape={X_pred.shape}")
 
-            prediction_result = model.predict(n_periods=1, X=X_pred)
-            if isinstance(prediction_result, pd.Series):
-                pred_vol = prediction_result.iloc[0]
-            else:
-                pred_vol = prediction_result[0]
-            # logger.info(f"[generate_ml_views] PERMNO {permno}: Predicted volatility={pred_vol:.4f}")
+#             prediction_result = model.predict(n_periods=1, X=X_pred)
+#             if isinstance(prediction_result, pd.Series):
+#                 pred_vol = prediction_result.iloc[0]
+#             else:
+#                 pred_vol = prediction_result[0]
+#             # logger.info(f"[generate_ml_views] PERMNO {permno}: Predicted volatility={pred_vol:.4f}")
             
-            predictions[permno] = pred_vol
+#             predictions[permno] = pred_vol
             
-            residual_variances[permno] = np.var(model.resid())
-        except Exception as e:
-            logger.error(f"[generate_ml_views] PERMNO {permno}: ERROR processing permno: {e}")
-            logger.error(f"[generate_ml_views] PERMNO {permno}: Traceback: {traceback.format_exc()}")
-            continue
+#             residual_variances[permno] = np.var(model.resid())
+#         except Exception as e:
+#             logger.error(f"[generate_ml_views] PERMNO {permno}: ERROR processing permno: {e}")
+#             logger.error(f"[generate_ml_views] PERMNO {permno}: Traceback: {traceback.format_exc()}")
+#             continue
 
-    if benchmark_permno not in predictions:
-        logger.warning(f"No prediction for benchmark permno {benchmark_permno}, cannot generate views.")
-        logger.info("[generate_ml_views] Function exit (no benchmark prediction).")
-        return np.array([]), np.array([]), np.array([])
+#     if benchmark_permno not in predictions:
+#         logger.warning(f"No prediction for benchmark permno {benchmark_permno}, cannot generate views.")
+#         logger.info("[generate_ml_views] Function exit (no benchmark prediction).")
+#         return np.array([]), np.array([]), np.array([])
 
-    sorted_predictions = sorted(predictions.items(), key=lambda item: item[1])
-    non_benchmark_predictions = [p for p in sorted_predictions if p[0] != benchmark_permno]
-    logger.info(f"[generate_ml_views] Sorted predictions len={len(sorted_predictions)}, non_benchmark_predictions len={len(non_benchmark_predictions)}")
+#     sorted_predictions = sorted(predictions.items(), key=lambda item: item[1])
+#     non_benchmark_predictions = [p for p in sorted_predictions if p[0] != benchmark_permno]
+#     logger.info(f"[generate_ml_views] Sorted predictions len={len(sorted_predictions)}, non_benchmark_predictions len={len(non_benchmark_predictions)}")
 
-    if not non_benchmark_predictions:
-        logger.info("No predictions for non-benchmark assets, cannot generate views.")
-        logger.info("[generate_ml_views] Function exit (no non-benchmark predictions).")
-        return np.array([]), np.array([]), np.array([])
+#     if not non_benchmark_predictions:
+#         logger.info("No predictions for non-benchmark assets, cannot generate views.")
+#         logger.info("[generate_ml_views] Function exit (no non-benchmark predictions).")
+#         return np.array([]), np.array([]), np.array([])
 
-    best_performer_permno, best_performer_vol = non_benchmark_predictions[0]
-    worst_performer_permno, worst_performer_vol = non_benchmark_predictions[-1]
-    benchmark_vol = predictions[benchmark_permno]
-    logger.info(f"[generate_ml_views] Best performer: {best_performer_permno} ({best_performer_vol:.4f}), Worst performer: {worst_performer_permno} ({worst_performer_vol:.4f}), Benchmark vol: {benchmark_vol:.4f}")
+#     best_performer_permno, best_performer_vol = non_benchmark_predictions[0]
+#     worst_performer_permno, worst_performer_vol = non_benchmark_predictions[-1]
+#     benchmark_vol = predictions[benchmark_permno]
+#     logger.info(f"[generate_ml_views] Best performer: {best_performer_permno} ({best_performer_vol:.4f}), Worst performer: {worst_performer_permno} ({worst_performer_vol:.4f}), Benchmark vol: {benchmark_vol:.4f}")
 
-    view_definitions = []
-    if best_performer_vol < benchmark_vol:
-        view_definitions.append({
-            'winner': best_performer_permno,
-            'loser': benchmark_permno,
-            'confidence': view_outperformance
-        })
+#     view_definitions = []
+#     if best_performer_vol < benchmark_vol:
+#         view_definitions.append({
+#             'winner': best_performer_permno,
+#             'loser': benchmark_permno,
+#             'confidence': view_outperformance
+#         })
 
-    if worst_performer_vol > benchmark_vol:
-        view_definitions.append({
-            'winner': benchmark_permno,
-            'loser': worst_performer_permno,
-            'confidence': view_outperformance
-        })
-    logger.info(f"[generate_ml_views] View definitions len={len(view_definitions)}")
+#     if worst_performer_vol > benchmark_vol:
+#         view_definitions.append({
+#             'winner': benchmark_permno,
+#             'loser': worst_performer_permno,
+#             'confidence': view_outperformance
+#         })
+#     logger.info(f"[generate_ml_views] View definitions len={len(view_definitions)}")
 
-    if not view_definitions:
-        logger.info("No confident views were generated.")
-        logger.info("[generate_ml_views] Function exit (no view definitions).")
-        return np.array([]), np.array([]), np.array([])
+#     if not view_definitions:
+#         logger.info("No confident views were generated.")
+#         logger.info("[generate_ml_views] Function exit (no view definitions).")
+#         return np.array([]), np.array([]), np.array([])
 
-    num_views = len(view_definitions)
-    num_assets = len(permnos)
+#     num_views = len(view_definitions)
+#     num_assets = len(permnos)
     
-    P = np.zeros((num_views, num_assets))
-    Q = np.zeros((num_views, 1))
-    logger.info(f"[generate_ml_views] Initial P shape={P.shape}, Q shape={Q.shape}")
+#     P = np.zeros((num_views, num_assets))
+#     Q = np.zeros((num_views, 1))
+#     logger.info(f"[generate_ml_views] Initial P shape={P.shape}, Q shape={Q.shape}")
     
-    temp_P = P.copy()
-    for i, view in enumerate(view_definitions):
-        winner_idx = permnos.index(view['winner'])
-        loser_idx = permnos.index(view['loser'])
-        temp_P[i, winner_idx] = 1
-        temp_P[i, loser_idx] = -1
-    omega_diag_vector = np.diag(temp_P @ (tau * Sigma) @ temp_P.T).copy()
-    logger.info(f"[generate_ml_views] omega_diag_vector shape={omega_diag_vector.shape}")
+#     temp_P = P.copy()
+#     for i, view in enumerate(view_definitions):
+#         winner_idx = permnos.index(view['winner'])
+#         loser_idx = permnos.index(view['loser'])
+#         temp_P[i, winner_idx] = 1
+#         temp_P[i, loser_idx] = -1
+#     omega_diag_vector = np.diag(temp_P @ (tau * Sigma) @ temp_P.T).copy()
+#     logger.info(f"[generate_ml_views] omega_diag_vector shape={omega_diag_vector.shape}")
 
-    for i, view in enumerate(view_definitions):
-        winner_idx = permnos.index(view['winner'])
-        loser_idx = permnos.index(view['loser'])
-        P[i, winner_idx] = 1
-        P[i, loser_idx] = -1
-        Q[i] = view['confidence']
-        logger.info(f"View {i}: Expect {view['winner']} to outperform {view['loser']}, confidence={view['confidence']}")
+#     for i, view in enumerate(view_definitions):
+#         winner_idx = permnos.index(view['winner'])
+#         loser_idx = permnos.index(view['loser'])
+#         P[i, winner_idx] = 1
+#         P[i, loser_idx] = -1
+#         Q[i] = view['confidence']
+#         logger.info(f"View {i}: Expect {view['winner']} to outperform {view['loser']}, confidence={view['confidence']}")
 
-        if config.USE_DYNAMIC_OMEGA:
-            winner_resid_var = residual_variances.get(view['winner'], 0)
-            loser_resid_var = residual_variances.get(view['loser'], 0)
-            avg_resid_var = (winner_resid_var + loser_resid_var) / 2
-            omega_diag_vector[i] += avg_resid_var
-            logger.info(f"Applying dynamic omega, adding {avg_resid_var:.6f} to base uncertainty. New omega_diag_vector[{i}]={omega_diag_vector[i]:.6f}")
+#         if config.USE_DYNAMIC_OMEGA:
+#             winner_resid_var = residual_variances.get(view['winner'], 0)
+#             loser_resid_var = residual_variances.get(view['loser'], 0)
+#             avg_resid_var = (winner_resid_var + loser_resid_var) / 2
+#             omega_diag_vector[i] += avg_resid_var
+#             logger.info(f"Applying dynamic omega, adding {avg_resid_var:.6f} to base uncertainty. New omega_diag_vector[{i}]={omega_diag_vector[i]:.6f}")
 
-    Omega = np.diag(omega_diag_vector)
+#     Omega = np.diag(omega_diag_vector)
 
-    logger.info(f"[generate_ml_views] Final P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
-    logger.info("[generate_ml_views] Function exit.")
-    return P, Q, Omega
+#     logger.info(f"[generate_ml_views] Final P shape={P.shape}, Q shape={Q.shape}, Omega shape={Omega.shape}")
+#     logger.info("[generate_ml_views] Function exit.")
+#     return P, Q, Omega
+
+def generate_permno_tensors(permno, full_feature_df, indicator_features, all_features, train_window_rows, model_params):
+    permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
+    
+    target_indicator_cols = [f'target_{col}' for col in indicator_features]
+    permno_df = permno_df.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
+
+    # If specified, restrict training rows for speed (use most recent rows)
+    if train_window_rows is not None and len(permno_df) > train_window_rows:
+        permno_df = permno_df.tail(train_window_rows)
+    # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df shape={permno_df.shape}, columns={permno_df.columns.tolist()}")
+
+    X_data = permno_df[all_features].values
+    y_indicators = permno_df[target_indicator_cols].values
+    y_returns = permno_df['target_return'].values
+    # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
+
+    X_seq, y_seq_combined = _create_sequences(
+        data=np.hstack([X_data, y_indicators, y_returns.reshape(-1,1)]), 
+        looback_window=model_params['lookback_window'])
+    # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_seq shape={X_seq.shape}, y_seq_combined shape={y_seq_combined.shape}")
+    
+    X_train_seq = X_seq[:, :, :-len(indicator_features)-1]
+    y_train_indicators_seq = y_seq_combined[:, -len(indicator_features)-1:-1]
+    y_train_returns_seq = y_seq_combined[:, -1]
+    # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_seq shape={X_train_seq.shape}, y_train_indicators_seq shape={y_train_indicators_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
+    X_train_tensor = torch.from_numpy(X_train_seq).float()
+    y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
+    
+    X_test_seq = np.array([X_data[-model_params['lookback_window']:]])
+    X_test_tensor = torch.from_numpy(X_test_seq).float()
+    return X_train_tensor, y_train_indicators_tensor, y_train_returns_seq, X_test_tensor
+
+
 
 def _create_sequences(data, lookback_window):
     logger.info("[_create_sequences] Function entry.")
@@ -223,7 +257,7 @@ def _create_sequences(data, lookback_window):
     logger.info("[_create_sequences] Function exit.")
     return np.array(xs), np.array(ys)
 
-def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params):
+def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model, model_params):
     logger.info("[generate_tcn_svr_views] Function entry.")
     logger.info(f"[generate_tcn_svr_views] Input: analysis_date={analysis_date}, permnos len={len(permnos)}, full_feature_df shape={full_feature_df.shape}, model_params={model_params}")
     
@@ -254,47 +288,18 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
     all_X_test_tensors_list = []
     
     logger.info(f"[generate_tcn_svr_views] Gathering data for TCN_SVR training...")
+    
     for i, permno in enumerate(permnos):
         # logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
-        permno_df = full_feature_df[full_feature_df['permno'] == permno].copy()
-        
-        target_indicator_cols = [f'target_{col}' for col in indicator_features]
-        permno_df = permno_df.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
-
-        # If specified, restrict training rows for speed (use most recent rows)
-        if train_window_rows is not None and len(permno_df) > train_window_rows:
-            permno_df = permno_df.tail(train_window_rows)
-        # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: permno_df shape={permno_df.shape}, columns={permno_df.columns.tolist()}")
-        
-        if len(permno_df) < model_params['lookback_window'] + 1:
-            logger.warning(f"Skipping view generation for {permno} due to insufficient data. (Data count: {len(permno_df)}, lookback: {model_params['lookback_window']})")
-            predicted_returns[i] = 0
-            continue
-
-        X_data = permno_df[all_features].values
-        y_indicators = permno_df[target_indicator_cols].values
-        y_returns = permno_df['target_return'].values
-        # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_data shape={X_data.shape}, y_indicators shape={y_indicators.shape}, y_returns shape={y_returns.shape}")
-
-        X_seq, y_seq_combined = _create_sequences(np.hstack([X_data, y_indicators, y_returns.reshape(-1,1)]), model_params['lookback_window'])
-        # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_seq shape={X_seq.shape}, y_seq_combined shape={y_seq_combined.shape}")
-        
-        X_train_seq = X_seq[:, :, :-len(indicator_features)-1]
-        y_train_indicators_seq = y_seq_combined[:, -len(indicator_features)-1:-1]
-        y_train_returns_seq = y_seq_combined[:, -1]
-        # logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_seq shape={X_train_seq.shape}, y_train_indicators_seq shape={y_train_indicators_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
-        X_train_tensor = torch.from_numpy(X_train_seq).float()
-        y_train_indicators_tensor = torch.from_numpy(y_train_indicators_seq).float()
-        
-        X_test_seq = np.array([X_data[-model_params['lookback_window']:]])
-        X_test_tensor = torch.from_numpy(X_test_seq).float()
+        X_train_tensor, y_indicators_tensor, y_returns_seq, X_test_tensor = generate_permno_tensors(
+            i, permno, full_feature_df, indicator_features, all_features, train_window_rows, predicted_returns, model_params
+        )
         
         all_X_train_tensors_list.append(X_train_tensor)
-        all_y_indicators_tensors_list.append(y_train_indicators_tensor)
-        all_y_returns_seq_list.append(y_train_returns_seq)
+        all_y_indicators_tensors_list.append(y_indicators_tensor)
+        all_y_returns_seq_list.append(y_returns_seq)
         all_X_test_tensors_list.append(X_test_tensor)
     
-
     all_X_train_tensors = torch.from_numpy(np.concatenate(all_X_train_tensors_list, axis=0))
     all_y_indicator_tensors = torch.from_numpy(np.concatenate(all_y_indicators_tensors_list, axis=0))
     all_y_returns_seq = np.hstack(all_y_returns_seq_list)
@@ -307,17 +312,6 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
     all_y_returns_seq = all_y_returns_seq[perm.numpy()]
 
     logger.info(f"[generate_tcn_svr_views] Preparing to fit TCN_SVR_Model with input_size={len(all_features)}, output_size={len(indicator_features)}")
-    model = TCN_SVR_Model(
-            input_size=len(all_features),
-            output_size=len(indicator_features),
-            num_channels=model_params['num_channels'],
-            kernel_size=model_params['kernel_size'],
-            dropout=model_params['dropout'],
-            lookback_window=model_params['lookback_window'],
-            svr_C=model_params.get('svr_C', 1.0),
-            svr_gamma=model_params.get('svr_gamma', 'scale'),
-            lr=model_params.get('lr', 0.001) # Pass the tuned learning rate
-        )
     
     model.fit(all_X_train_tensors, all_y_indicator_tensors, all_y_returns_seq,
             epochs=model_params.get('epochs', 50),
