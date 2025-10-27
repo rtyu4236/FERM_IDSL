@@ -243,6 +243,7 @@ class BlackLittermanPortfolio:
 
         try:
             solution = solvers.qp(P_opt, q_opt, G, h, A, b, solver='qp')
+            logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] CVXOPT solution status: {solution['status']}")
             result_x = np.array(solution['x']).flatten()
             weights = result_x[:n]
             # logger.info(f"[BlackLittermanPortfolio.get_black_litterman_portfolio] Optimization successful. weights shape={weights.shape}")

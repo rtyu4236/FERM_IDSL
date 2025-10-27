@@ -38,7 +38,7 @@ GPU_SETTINGS = {
 # Model Parameter Settings
 MODEL_PARAMS = {
     # Common Parameters
-    'max_weight': 0.7,
+    'max_weight': 0.4,
     'market_proxy_permno': 84398,  # SPY
 
     # ARIMAX Model Parameters
