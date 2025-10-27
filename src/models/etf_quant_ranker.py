@@ -14,14 +14,6 @@ warnings.filterwarnings('ignore', category=UserWarning)
 RANDOM_SEED = 42
 
 def create_etf_universe_from_daily(daily_df, etf_permnos=None):
-    """
-    A modified function to create ETF universe data using actual OHLCV values from CRSP daily_df.
-    Args:
-        daily_df (pd.DataFrame): Daily CRSP data (columns are assumed to be lowercase)
-        etf_permnos (list): List of ETF PERMNOs. If None, all are used.
-    Returns:
-        pd.DataFrame: ETF universe data (MultiIndex: date, permno)
-    """
     required_cols = ['date', 'permno', 'openprc', 'askhi', 'bidlo', 'prc', 'vol']
     missing_cols = [col for col in required_cols if col not in daily_df.columns]
     if missing_cols:
@@ -85,7 +77,6 @@ class ETFQuantRanker:
         analysis_date = pd.to_datetime(analysis_date_str)
         logger.info(f"Starting selection of top {top_n} ETFs as of {analysis_date_str}...")
 
-        # Disk cache key
         cache_key = f"rank_{analysis_date.strftime('%Y%m%d')}_top{top_n}.pkl"
         cache_path = os.path.join(self.cache_dir, cache_key)
         if self.ranking_cache and os.path.exists(cache_path):
@@ -97,7 +88,6 @@ class ETFQuantRanker:
             except Exception as e:
                 logger.warning(f"Failed to load ranking cache: {e}")
 
-        # Apply lookback window to daily data for ranking
         if self.ranking_lookback_years is not None:
             lookback_start = analysis_date - pd.DateOffset(years=self.ranking_lookback_years)
             data_for_ranking = daily_df[(daily_df['date'] <= analysis_date) & (daily_df['date'] >= lookback_start)].copy()
@@ -178,7 +168,6 @@ class ETFQuantRanker:
         rebal_df['momentum_score'] = rebal_df[momentum_rank_cols].mean(axis=1)
         rebal_df['final_score'] = 0.5 * rebal_df['momentum_score'] + 0.5 * rebal_df['ml_score_rank']
 
-        # Save the full ranking details if output_dir is provided
         if output_dir:
             try:
                 details_path = os.path.join(output_dir, f"ranking_details_{analysis_date.strftime('%Y-%m-%d')}.csv")
@@ -190,7 +179,6 @@ class ETFQuantRanker:
         top_permnos = rebal_df.sort_values('final_score', ascending=False).head(top_n).index.get_level_values('permno').tolist()
         logger.info(f"Selection complete: {len(top_permnos)} ETFs")
 
-        # Save to disk cache if enabled
         if self.ranking_cache:
             try:
                 with open(cache_path, 'wb') as f:

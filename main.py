@@ -20,25 +20,21 @@ if __name__ == '__main__':
     logger_setup.logger.info("main.py execution started.")
     logger_setup.logger.info(f"Arguments: tune={args.tune}, ranking={args.ranking}, tune_trials_per_month={config.MODEL_PARAMS['tcn_svr_params']['tune_trials_per_month']}")
 
-    # 1. Load all data
     daily_df, monthly_df, vix_df, ff_df, all_permnos = data_manager.load_raw_data()
 
-    # 2. 월별 동적 유동성 필터 적용
     liquid_universe_dict = None
     initial_universe_permnos = all_permnos
         
-    # 월별 리밸런싱 날짜 생성 (월말)
     monthly_dates = pd.date_range(
         start=f"{config.START_YEAR}-01-01", end=f"{config.END_YEAR}-12-31", freq='M'
     )
-    # 월별 유동성 필터 적용
     liquid_universe_dict = data_manager.filter_liquid_universe(
         daily_df=daily_df,
         all_permnos=all_permnos,
         monthly_dates=monthly_dates,
         min_avg_value=config.MODEL_PARAMS.get('min_avg_value', 1_000_000)
     )
-    # 5년 이상 거래 이력 필터 (각 월별로 적용)
+    
     logger_setup.logger.info("Filtering universe by minimum history (5 years) for each month...")
     MIN_MONTHS = 5 * 12
     for date in monthly_dates:
@@ -50,10 +46,7 @@ if __name__ == '__main__':
         ].groupby('permno').size()
         history_filtered_permnos = history_counts[history_counts >= MIN_MONTHS].index.tolist()
         liquid_universe_dict[filter_date] = history_filtered_permnos
-    # 최초 universe는 첫 월의 permnos로 설정 (비상시)
     initial_universe_permnos = liquid_universe_dict[monthly_dates[0]]
-
-    # 3. Pass all data and settings to the backtester and run
     ff_df_from_backtest, avg_turnover, start_year_backtest, end_year_backtest = backtester.run_backtest(
         daily_df=daily_df,
         monthly_df=monthly_df,
@@ -72,7 +65,6 @@ if __name__ == '__main__':
     )
     logger_setup.logger.info("backtester.run_backtest completed.")
 
-    # 4. Generate performance reports (summary + yearly returns)
     logger_setup.logger.info("\nGenerating performance reports...")
     try:
         cumulative_returns_path = os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME, 'cumulative_returns.csv')
@@ -90,7 +82,6 @@ if __name__ == '__main__':
     except Exception as e:
         logger_setup.logger.error(f"Failed to generate performance reports: {e}")
 
-    # 5. Visualize results
     logger_setup.logger.info("\nResult visualization started.")
     try:
         cumulative_returns_path = os.path.join(config.OUTPUT_DIR, logger_setup.logger.LOG_NAME, 'cumulative_returns.csv')

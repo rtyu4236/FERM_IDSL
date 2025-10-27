@@ -13,8 +13,7 @@ from src.tuning import tcn_svr_tuner
 from src.models.etf_quant_ranker import ETFQuantRanker, create_etf_universe_from_daily
 
 def apply_costs_to_returns(returns, permno, filtered_costs):
-    """Apply realistic costs to benchmark returns for fair comparison"""
-    expense_ratio = filtered_costs.get(permno, {}).get('expense_ratio', 0) / 12  # Monthly expense ratio
+    expense_ratio = filtered_costs.get(permno, {}).get('expense_ratio', 0) / 12
     return returns - expense_ratio
 
 
@@ -22,17 +21,14 @@ def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permno
     logger.info(f"[_filter_config_by_permnos] Filtering configs for {len(all_available_permnos)} permnos.")
     available_set = set(all_available_permnos)
     
-    # 키를 안전하게 int로 변환
     etf_costs_int_keys = {}
     for k, v in etf_costs.items():
         try:
-            int_key = int(k)
-            etf_costs_int_keys[int_key] = v
+            etf_costs_int_keys[int(k)] = v
         except (ValueError, TypeError) as e:
             logger.warning(f"[_filter_config_by_permnos] Skipping invalid key '{k}': {e}")
             continue
     
-    # 투자 가능한 유니버스에 있는 ETF만 선택
     filtered_costs = {p: c for p, c in etf_costs_int_keys.items() if p in available_set}
     
     for permno in available_set:
@@ -40,7 +36,6 @@ def _filter_config_by_permnos(all_available_permnos, etf_costs, benchmark_permno
             logger.warning(f"Cost information for PERMNO '{permno}' not found in config.ETF_COSTS. Using default value 0.")
             filtered_costs[permno] = {'expense_ratio': 0.0, 'trading_cost_spread': 0.0}
     
-    # Do not filter out benchmarks based on investable universe; keep as provided (None allowed)
     filtered_benchmark_permnos = benchmark_permnos
     return filtered_costs, filtered_benchmark_permnos
 

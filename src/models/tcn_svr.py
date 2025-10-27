@@ -7,43 +7,14 @@ from config.settings import GPU_SETTINGS
 
 
 class LastTimeStep(nn.Module):
-    """A custom PyTorch module to extract the last time step from a sequence output."""
     def forward(self, x):
-        logger.debug(f"[LastTimeStep.forward] Function entry. Input x shape={x.shape}, dtype={x.dtype}")
         output = x[:, :, -1]
-        logger.debug(f"[LastTimeStep.forward] Output shape={output.shape}, dtype={output.dtype}")
         return output
 
 class TCN_SVR_Model:
-    """
-    A hybrid model combining a Temporal Convolutional Network (TCN) for feature extraction
-    from time-series data and a Support Vector Regression (SVR) for final prediction.
-
-    The TCN part is a PyTorch model that learns to predict future technical indicators.
-    The SVR part is a scikit-learn model that takes the TCN\'s predicted indicators as input
-    to predict the final return.
-    """
     def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale', lr=0.001, loss_function='huber', huber_delta=1.0):
-        """
-        Initializes the TCN and SVR models.
-
-        Args:
-            input_size (int): The number of input features for the TCN.
-            output_size (int): The number of output indicators for the TCN to predict.
-            num_channels (list): A list of integers defining the number of channels in each TCN layer.
-            kernel_size (int): The size of the convolutional kernel.
-            dropout (float): The dropout rate for regularization.
-            lookback_window (int): The number of past time steps to use for prediction.
-            svr_C (float): The C parameter for the SVR model.
-            svr_gamma (str or float): The gamma parameter for the SVR model.
-            lr (float): The learning rate for the TCN optimizer.
-            loss_function (str): The loss function to use ('mse' or 'huber').
-            huber_delta (float): The delta parameter for Huber loss.
-        """
         logger.info("[TCN_SVR_Model.__init__] Function entry.")
         logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}, lr={lr}, loss_function={loss_function}, huber_delta={huber_delta}")
-        
-        # Select device based on GPU settings
         if GPU_SETTINGS['force_cpu']:
             self.device = torch.device('cpu')
             logger.info("[TCN_SVR_Model.__init__] Force CPU mode enabled.")
@@ -64,17 +35,16 @@ class TCN_SVR_Model:
         logger.info(f"[TCN_SVR_Model.__init__] TCN model initialized. Type: {type(self.tcn_model)}")
         self.net = nn.Sequential(
             self.tcn_model,
-            LastTimeStep(), # Use the custom module
+            LastTimeStep(),
             nn.Linear(num_channels[-1], output_size)
         )
         logger.info(f"[TCN_SVR_Model.__init__] Sequential network initialized. Type: {type(self.net)}")
-        # Move network to device
         self.net.to(self.device)
-        self.use_amp = True # Enable mixed precision if supported
+        self.use_amp = True
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
         if loss_function == 'huber':
             self.criterion = nn.HuberLoss(delta=huber_delta)
-        else: # default to MSE
+        else:
             self.criterion = nn.MSELoss()
         self.lookback_window = lookback_window
 
@@ -93,7 +63,6 @@ class TCN_SVR_Model:
         MIN_SAMPLES_FOR_SPLIT = 5
         can_validate = X_train_tensor.shape[0] >= MIN_SAMPLES_FOR_SPLIT
 
-        # Move training tensors to device and cast to half precision if AMP is enabled
         if self.device.type == 'cuda' and self.use_amp:
             X_train_tensor = X_train_tensor.to(self.device).half()
             y_train_indicators_tensor = y_train_indicators_tensor.to(self.device).half()
@@ -116,7 +85,6 @@ class TCN_SVR_Model:
         patience_counter = 0
         best_model_state = None
 
-        # 1. Train the TCN model
         scaler = torch.cuda.amp.GradScaler(enabled=(self.device.type == 'cuda' and self.use_amp))
 
         for epoch in range(epochs):
@@ -129,10 +97,8 @@ class TCN_SVR_Model:
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - After TCN forward pass. Output shape={output.shape}")
             loss = self.criterion(output, y_train_tcn)
             scaler.scale(loss).backward()
-            
-            # 강화된 그래디언트 클리핑 (그래디언트 폭발 방지)
             scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=0.1)  # 정규화된 데이터에 맞게 더 강한 클리핑
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=0.1)
             
             scaler.step(self.optimizer)
             scaler.update()

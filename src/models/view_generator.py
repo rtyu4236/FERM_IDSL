@@ -11,18 +11,14 @@ import traceback
 import torch
 from src.models.tcn_svr import TCN_SVR_Model
 
-# In-process cache for warm-starting TCN per permno across months.
-# Structure: { permno: { signature_tuple: state_dict } }
 _TCN_STATE_CACHE = {}
 
 def clear_tcn_cache():
-    """Clear the warm start cache. Useful when architecture changes or to reset state."""
     global _TCN_STATE_CACHE
     _TCN_STATE_CACHE.clear()
     logger.info("[clear_tcn_cache] Warm start cache cleared.")
 
 def _tcn_signature(input_size, output_size, num_channels, kernel_size, lookback_window):
-    """Return a tuple that uniquely describes the TCN architecture for warm start."""
     return (
         int(input_size),
         int(output_size),
@@ -32,7 +28,6 @@ def _tcn_signature(input_size, output_size, num_channels, kernel_size, lookback_
     )
 
 def _filter_compatible_state(model, cached_state):
-    """Return a filtered state_dict containing only keys with matching shapes."""
     try:
         model_state = model.net.state_dict()
     except Exception:
@@ -251,14 +246,11 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
     for i, permno in enumerate(permnos):
         logger.info(f"[generate_tcn_svr_views] Processing permno: {permno}")
 
-        # --- [수정 1] 데이터 분리 (analysis_date 기준) ---
-        # 1. 학습용 데이터 (analysis_date 미만)
         train_df_hist = full_feature_df[
             (full_feature_df['permno'] == permno) & 
             (full_feature_df['date'] < analysis_date)
         ].copy()
 
-        # 2. 예측용 피처 윈도우 (analysis_date 포함 과거 lookback 만큼)
         features_for_pred_df = full_feature_df[
             (full_feature_df['permno'] == permno) &
             (full_feature_df['date'] <= analysis_date) 
@@ -267,7 +259,6 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
 
         target_indicator_cols = [f'target_{col}' for col in indicator_features]
 
-        # --- [수정 2] 학습 데이터에만 dropna 및 윈도우 적용 ---
         permno_df = train_df_hist.dropna(subset=all_features + ['target_return'] + target_indicator_cols)
 
         if train_window_rows is not None and len(permno_df) > train_window_rows:
@@ -281,7 +272,6 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             predicted_returns[i] = 0
             continue
 
-        # --- [수정 3] 학습용 시퀀스 생성 ---
         X_data = permno_df[all_features].values
         y_indicators = permno_df[target_indicator_cols].values
         y_returns = permno_df['target_return'].values
@@ -293,8 +283,7 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
         y_train_returns_seq = y_seq_combined[:, -1]
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_train_seq shape={X_train_seq.shape}, y_train_returns_seq shape={y_train_returns_seq.shape}")
         # -----------------------------------------------
-        
-        # --- [수정 4] 예측용(Test) 시퀀스 생성 ---
+
         test_feature_window_df = features_for_pred_df.tail(model_params['lookback_window'])
         
         if len(test_feature_window_df) < model_params['lookback_window']:
@@ -302,7 +291,7 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
             predicted_returns[i] = 0
             continue
         
-        # 예측용 윈도우에 NaN이 있는지 확인 (중요)
+        # 예측용 윈도우에 NaN이 있는지 확인
         if test_feature_window_df[all_features].isnull().values.any():
              logger.warning(f"Skipping view generation for {permno} due to NaNs in PREDICTION window.")
              predicted_returns[i] = 0
@@ -312,7 +301,6 @@ def generate_tcn_svr_views(analysis_date, permnos, full_feature_df, model_params
         logger.info(f"[generate_tcn_svr_views] PERMNO {permno}: X_test_seq shape={X_test_seq.shape}")
         # -----------------------------------------------
 
-        # --- [수정 5] 정규화 (학습 데이터로만 fit) ---
         from sklearn.preprocessing import StandardScaler
         
         # X 데이터 정규화
