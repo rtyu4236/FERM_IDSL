@@ -3,6 +3,7 @@ import torch.nn as nn
 from pytorch_tcn import TCN
 from sklearn.svm import SVR
 from src.utils.logger import logger
+from config.settings import GPU_SETTINGS
 
 
 class LastTimeStep(nn.Module):
@@ -22,7 +23,7 @@ class TCN_SVR_Model:
     The SVR part is a scikit-learn model that takes the TCN\'s predicted indicators as input
     to predict the final return.
     """
-    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale', lr=0.001):
+    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, lookback_window, svr_C=1.0, svr_gamma='scale', lr=0.001, loss_function='huber', huber_delta=1.0):
         """
         Initializes the TCN and SVR models.
 
@@ -36,12 +37,29 @@ class TCN_SVR_Model:
             svr_C (float): The C parameter for the SVR model.
             svr_gamma (str or float): The gamma parameter for the SVR model.
             lr (float): The learning rate for the TCN optimizer.
+            loss_function (str): The loss function to use ('mse' or 'huber').
+            huber_delta (float): The delta parameter for Huber loss.
         """
         logger.info("[TCN_SVR_Model.__init__] Function entry.")
-        logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}, lr={lr}")
-        # Select device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        logger.info(f"[TCN_SVR_Model.__init__] Using device: {self.device}")
+        logger.info(f"[TCN_SVR_Model.__init__] Input: input_size={input_size}, output_size={output_size}, num_channels={num_channels}, kernel_size={kernel_size}, dropout={dropout}, lookback_window={lookback_window}, svr_C={svr_C}, svr_gamma={svr_gamma}, lr={lr}, loss_function={loss_function}, huber_delta={huber_delta}")
+        
+        # Select device based on GPU settings
+        if GPU_SETTINGS['force_cpu']:
+            self.device = torch.device('cpu')
+            logger.info("[TCN_SVR_Model.__init__] Force CPU mode enabled.")
+        elif GPU_SETTINGS['use_gpu'] and torch.cuda.is_available():
+            gpu_id = GPU_SETTINGS['gpu_id']
+            if gpu_id < torch.cuda.device_count():
+                self.device = torch.device(f'cuda:{gpu_id}')
+                logger.info(f"[TCN_SVR_Model.__init__] Using GPU {gpu_id}: {torch.cuda.get_device_name(gpu_id)}")
+            else:
+                self.device = torch.device('cpu')
+                logger.warning(f"[TCN_SVR_Model.__init__] Requested GPU {gpu_id} not available. Available GPUs: {torch.cuda.device_count()}. Using CPU.")
+        else:
+            self.device = torch.device('cpu')
+            logger.info("[TCN_SVR_Model.__init__] Using CPU (GPU not available or disabled).")
+        
+        logger.info(f"[TCN_SVR_Model.__init__] Final device: {self.device}")
         self.tcn_model = TCN(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
         logger.info(f"[TCN_SVR_Model.__init__] TCN model initialized. Type: {type(self.tcn_model)}")
         self.net = nn.Sequential(
@@ -54,7 +72,10 @@ class TCN_SVR_Model:
         self.net.to(self.device)
         self.use_amp = True # Enable mixed precision if supported
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
-        self.criterion = nn.MSELoss()
+        if loss_function == 'huber':
+            self.criterion = nn.HuberLoss(delta=huber_delta)
+        else: # default to MSE
+            self.criterion = nn.MSELoss()
         self.lookback_window = lookback_window
 
         self.svr_model = SVR(kernel='rbf', C=svr_C, gamma=svr_gamma)
@@ -107,8 +128,12 @@ class TCN_SVR_Model:
                 output = self.net(X_train_tcn.permute(0, 2, 1))
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - After TCN forward pass. Output shape={output.shape}")
             loss = self.criterion(output, y_train_tcn)
-            logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Loss calculated: {loss.item():.4f}")
             scaler.scale(loss).backward()
+            
+            # 강화된 그래디언트 클리핑 (그래디언트 폭발 방지)
+            scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=0.1)  # 정규화된 데이터에 맞게 더 강한 클리핑
+            
             scaler.step(self.optimizer)
             scaler.update()
             logger.debug(f"[TCN_SVR_Model.fit] Epoch {epoch+1} - Optimizer step completed.")
@@ -121,7 +146,7 @@ class TCN_SVR_Model:
                     val_loss = self.criterion(val_output, y_val_tcn)
                 
                 if (epoch + 1) % 10 == 0:
-                    logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}")
+                    logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.6f}, Val Loss: {val_loss.item():.6f} (Normalized Scale)")
 
                 if val_loss.item() < best_loss - min_delta:
                     best_loss = val_loss.item()
@@ -136,7 +161,7 @@ class TCN_SVR_Model:
                     logger.info(f"[TCN_SVR_Model.fit] Early stopping triggered after {epoch+1} epochs.")
                     break
             elif (epoch + 1) % 10 == 0:
-                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.4f}")
+                logger.info(f"[TCN_SVR_Model.fit] Epoch {epoch+1}/{epochs}, Train Loss: {loss.item():.6f} (Normalized Scale)")
         
         if can_validate and best_model_state:
             self.net.load_state_dict(best_model_state)

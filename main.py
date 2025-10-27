@@ -8,7 +8,7 @@ from src.backtesting import backtester
 from config import settings as config
 from src.utils import logger as logger_setup
 from src.data_processing import manager as data_manager
-
+    
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 if __name__ == '__main__':

@@ -10,6 +10,7 @@ pmdarima==2.0.4
 QuantStats==0.0.77
 scipy==1.15.3
 pyarrow==21.0.0
-pandas-ta==0.4.71b0
+optuna==3.6.1
+cmaes==0.10.0
 torch==2.7.1
 pytorch-tcn==1.2.3

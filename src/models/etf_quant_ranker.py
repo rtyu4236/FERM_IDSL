@@ -81,7 +81,7 @@ class ETFQuantRanker:
         logger.info(f"Factor calculation complete. Valid data size: {factors_df.shape}")
         return factors_df
 
-    def get_top_permnos(self, analysis_date_str: str, daily_df: pd.DataFrame, all_permnos: list, top_n: int = 100):
+    def get_top_permnos(self, analysis_date_str: str, daily_df: pd.DataFrame, all_permnos: list, top_n: int = 100, output_dir: str = None):
         analysis_date = pd.to_datetime(analysis_date_str)
         logger.info(f"Starting selection of top {top_n} ETFs as of {analysis_date_str}...")
 
@@ -177,6 +177,15 @@ class ETFQuantRanker:
         momentum_rank_cols = [f'{f}_rank' for f in features]
         rebal_df['momentum_score'] = rebal_df[momentum_rank_cols].mean(axis=1)
         rebal_df['final_score'] = 0.5 * rebal_df['momentum_score'] + 0.5 * rebal_df['ml_score_rank']
+
+        # Save the full ranking details if output_dir is provided
+        if output_dir:
+            try:
+                details_path = os.path.join(output_dir, f"ranking_details_{analysis_date.strftime('%Y-%m-%d')}.csv")
+                rebal_df.to_csv(details_path)
+                logger.info(f"Saved full ranking details to {details_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save ranking details: {e}")
 
         top_permnos = rebal_df.sort_values('final_score', ascending=False).head(top_n).index.get_level_values('permno').tolist()
         logger.info(f"Selection complete: {len(top_permnos)} ETFs")
